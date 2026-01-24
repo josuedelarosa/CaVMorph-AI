@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pydantic
+opencv-python
+numpy
+torch
+mmpose
+mmengine
+mmcv
+mmpretrain
+
