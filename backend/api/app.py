@@ -6,8 +6,9 @@ import sys
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -18,6 +19,8 @@ from backend.cavfish.manager import ModelManager
 from backend.cavfish.infer import infer_image  # array-based infer_image(model, rgb, *, cfg_path=..., device=...)
 from backend.cavfish.io import iter_images
 from backend.cavfish.draw import draw_overlay
+from backend.cavfish.phenotypes import compute_phenotypes
+from backend.cavfish.export import export_csv, export_json, export_annotated_images
 
 # --------------------------------------------------
 # Path bootstrap
@@ -91,6 +94,19 @@ class InferFolderReq(BaseModel):
     limit: Optional[int] = None
     return_overlay_png: bool = False
 
+class ExportCSVReq(BaseModel):
+    output_path: str
+    predictions: List[Dict[str, Any]]
+
+class ExportJSONReq(BaseModel):
+    output_path: str
+    predictions: List[Dict[str, Any]]
+
+class ExportAnnotatedImagesReq(BaseModel):
+    output_dir: str
+    predictions: List[Dict[str, Any]]
+    suffix: str = "_annotated"
+
 # --------------------------------------------------
 # Helpers
 # --------------------------------------------------
@@ -106,6 +122,54 @@ def read_image_for_model(img_path: str):
 
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
     return bgr, rgb
+
+
+def enrich_prediction_with_phenotypes(pred: Dict[str, Any], meta: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Compute phenotypes from keypoints and add to prediction.
+    """
+    if not isinstance(pred, dict):
+        return pred
+
+    # Extract keypoints
+    kpts = pred.get("keypoints", None)
+    if kpts is None:
+        return pred
+
+    # Handle different keypoint formats
+    if isinstance(kpts, list) and len(kpts) > 0:
+        # MMPose format: [ [ [x,y], ... ] ] or [ [x,y], ... ]
+        if isinstance(kpts[0], (list, tuple)) and len(kpts[0]) > 0 and isinstance(kpts[0][0], (list, tuple)):
+            kpts_array = np.array(kpts[0], dtype=np.float32)
+        else:
+            kpts_array = np.array(kpts, dtype=np.float32)
+    else:
+        return pred
+
+    if kpts_array.shape[0] < 20:
+        return pred
+
+    # Compute phenotypes
+    pairs = meta.get("phenotype_pairs", [])
+    scale_by_sl = meta.get("phenotype_scale_by_sl", False)
+    sl_pair = meta.get("phenotype_sl_pair", None)
+
+    try:
+        phenotypes = compute_phenotypes(
+            kpts_array,
+            pairs=pairs,
+            scale_by_sl=scale_by_sl,
+            sl_pair=sl_pair,
+        )
+
+        # Add phenotypes to extra_pred_fields
+        if "extra_pred_fields" not in pred:
+            pred["extra_pred_fields"] = {}
+        pred["extra_pred_fields"]["phenotypes"] = phenotypes
+    except Exception as e:
+        logger.warning("Failed to compute phenotypes: %s", e)
+
+    return pred
 
 # --------------------------------------------------
 # Endpoints
@@ -140,6 +204,9 @@ def infer_one(req: InferImageReq) -> Dict[str, Any]:
     if isinstance(pred, dict):
         pred.setdefault("image_path", img_path)
 
+    # Enrich with phenotypes
+    pred = enrich_prediction_with_phenotypes(pred, meta)
+
     if req.return_overlay_png:
         tmp_dir = (MODEL_DIR / "tmp").resolve()
         tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -167,7 +234,7 @@ def infer_folder(req: InferFolderReq) -> Dict[str, Any]:
         tmp_dir.mkdir(parents=True, exist_ok=True)
 
     preds = []
-    for i, p in enumerate(iter_images(folder, recursive=req.recursive)):
+    for i, p in enumerate(iter_images(folder)):
         bgr, rgb = read_image_for_model(p)
 
         pred = infer_image(
@@ -179,6 +246,9 @@ def infer_folder(req: InferFolderReq) -> Dict[str, Any]:
 
         if isinstance(pred, dict):
             pred.setdefault("image_path", p)
+
+        # Enrich with phenotypes
+        pred = enrich_prediction_with_phenotypes(pred, meta)
 
         if req.return_overlay_png and isinstance(pred, dict) and tmp_dir is not None:
             out_path = tmp_dir / (Path(p).stem + "_overlay.png")
@@ -192,3 +262,33 @@ def infer_folder(req: InferFolderReq) -> Dict[str, Any]:
             break
 
     return {"count": len(preds), "predictions": preds}
+
+# --------------------------------------------------
+# Export Endpoints
+# --------------------------------------------------
+@app.post("/export/csv")
+def export_to_csv(req: ExportCSVReq) -> Dict[str, Any]:
+    try:
+        export_csv(req.output_path, req.predictions, meta)
+        return {"ok": True, "output_path": req.output_path}
+    except Exception as e:
+        logger.exception("CSV export failed")
+        raise HTTPException(status_code=500, detail=f"CSV export failed: {e}")
+
+@app.post("/export/json")
+def export_to_json(req: ExportJSONReq) -> Dict[str, Any]:
+    try:
+        export_json(req.output_path, req.predictions)
+        return {"ok": True, "output_path": req.output_path}
+    except Exception as e:
+        logger.exception("JSON export failed")
+        raise HTTPException(status_code=500, detail=f"JSON export failed: {e}")
+
+@app.post("/export/annotated-images")
+def export_annotated(req: ExportAnnotatedImagesReq) -> Dict[str, Any]:
+    try:
+        export_annotated_images(req.output_dir, req.predictions, suffix=req.suffix)
+        return {"ok": True, "output_dir": req.output_dir}
+    except Exception as e:
+        logger.exception("Annotated images export failed")
+        raise HTTPException(status_code=500, detail=f"Annotated images export failed: {e}")
