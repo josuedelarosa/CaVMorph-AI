@@ -1,10 +1,10 @@
 from mmpose.registry import MODELS
-from mmpose.models.heads.heatmap_heads.heatmap_head import HeatmapHead
+from backend.third_party.mmpose.heatmap_head import CavfishHeatmapHead
 import torch
 import torch.nn.functional as F
 
 @MODELS.register_module()
-class HeatmapHeadNorm(HeatmapHead):
+class HeatmapHeadNorm(CavfishHeatmapHead):
     """HeatmapHead + optional coordinate-space L1 loss."""
     def __init__(self,
                  loss_coord=None,

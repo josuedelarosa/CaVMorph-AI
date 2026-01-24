@@ -4,10 +4,10 @@ import torch
 from torch import Tensor
 
 from mmpose.registry import MODELS
-from mmpose.models.heads.heatmap_heads.heatmap_head import HeatmapHead
+from backend.third_party.mmpose.heatmap_head import CavfishHeatmapHead
 
 @MODELS.register_module(name='MinPhenoHead')
-class MinPhenoHead(HeatmapHead):
+class MinPhenoHead(CavfishHeatmapHead):
     """HeatmapHead + término de pérdida fenotípica adicional."""
     def __init__(self, loss_pheno: dict, alpha_pheno: float = 1e-2, **kwargs):
         super().__init__(**kwargs)

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import List, Tuple, Optional
 import torch
 from torch import Tensor
@@ -5,7 +6,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from mmpose.registry import MODELS
-from mmpose.models.heads.heatmap_heads.heatmap_head import HeatmapHead
+
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from backend.third_party.mmpose.heatmap_head import CavfishHeatmapHead
+
 
 def softargmax2d(heatmaps: torch.Tensor, beta: float = 10.0) -> torch.Tensor:
     N, K, H, W = heatmaps.shape

@@ -23,7 +23,7 @@ def main():
     # For simplicity, choose a port via env var in Tauri, otherwise default 8008.
     port = args.port if args.port != 0 else int(os.environ.get("FISH_PORT", "8008"))
 
-    uvicorn.run("api.app:app", host=args.host, port=port, log_level="info")
+    uvicorn.run("backend.api.app:app", host=args.host, port=port, log_level="info")
 
 
 if __name__ == "__main__":
