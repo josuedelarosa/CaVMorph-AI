@@ -1,1 +1,107 @@
-models/cavfish_v1/weights.pth
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+*.so
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# =========================
+# Virtual Environments
+# =========================
+.env
+.venv
+venv/
+env/
+conda/
+miniconda/
+miniforge3/
+*.conda
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+*.nbconvert.ipynb
+
+# =========================
+# ML / DL Artifacts
+# =========================
+*.pth
+*.pt
+*.ckpt
+*.onnx
+*.engine
+*.h5
+*.npz
+*.npy
+
+logs/
+wandb/
+tensorboard/
+runs/
+outputs/
+predictions/
+results/
+checkpoints/
+
+# =========================
+# Datasets & media
+# =========================
+data/
+datasets/
+images/
+videos/
+*.jpg
+*.png
+*.mp4
+*.avi
+
+# =========================
+# Config & secrets
+# =========================
+.env
+*.key
+*.pem
+secrets.yaml
+secrets.json
+
+# =========================
+# OS junk
+# =========================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# =========================
+# Editors
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# Build & Desktop App
+# =========================
+desktop/dist/
+desktop/build/
+desktop/.cache/
+
+# =========================
+# FastAPI / Uvicorn
+# =========================
+*.log
+uvicorn.log
+
+# =========================
+# Temporary
+# =========================
+tmp/
+.cache/
+
