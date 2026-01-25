@@ -23,7 +23,11 @@
         "readFile": true,
         "writeFile": true,
         "createDir": true,
-        "exists": true
+        "exists": true,
+        "scope": ["$APPCONFIG", "$APPCONFIG/**", "$APPDATA", "$APPDATA/**", "$DOWNLOADS", "$DOWNLOADS/**", "$HOME", "$HOME/**"]
+      },
+      "path": {
+        "all": true
       }
     },
     "bundle": {

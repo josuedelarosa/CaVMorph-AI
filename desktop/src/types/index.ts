@@ -44,3 +44,20 @@ export interface ModelInfo {
 }
 
 export type AnalysisState = 'idle' | 'loading' | 'analyzing' | 'complete' | 'error'
+
+export interface Profile {
+  id: string
+  name: string
+  description: string
+  selectedKeypoints: number[]
+  selected_keypoints: number[]
+  createdAt: number
+  enabled: boolean
+  folder_path?: string
+}
+
+export interface AppConfig {
+  activeProfileId: string
+  profiles: Profile[]
+  darkMode: boolean
+}

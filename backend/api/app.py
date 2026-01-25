@@ -103,6 +103,8 @@ class InferFolderReq(BaseModel):
     recursive: bool = True
     limit: Optional[int] = None
     return_overlay_png: bool = False
+    profile_id: Optional[str] = None
+    profile_name: Optional[str] = None
 
 class ExportCSVReq(BaseModel):
     output_path: str
@@ -256,6 +258,11 @@ def infer_folder(req: InferFolderReq) -> Dict[str, Any]:
 
         if isinstance(pred, dict):
             pred.setdefault("image_path", p)
+            # Add profile information if provided
+            if req.profile_id:
+                pred["profile_id"] = req.profile_id
+            if req.profile_name:
+                pred["profile_name"] = req.profile_name
 
         # Enrich with phenotypes
         pred = enrich_prediction_with_phenotypes(pred, meta)

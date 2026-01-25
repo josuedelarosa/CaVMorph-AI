@@ -44,7 +44,9 @@ export async function analyzeImage(
 export async function analyzeFolder(
   folderPath: string,
   returnOverlay: boolean = true,
-  limit?: number
+  limit?: number,
+  profileId?: string,
+  profileName?: string
 ): Promise<BatchResult> {
   const url = await getBackendUrl()
   const response = await fetch(`${url}/infer/folder`, {
@@ -55,6 +57,8 @@ export async function analyzeFolder(
       recursive: true,
       return_overlay_png: returnOverlay,
       limit: limit || null,
+      profile_id: profileId || null,
+      profile_name: profileName || null,
     }),
   })
   if (!response.ok) throw new Error(`Batch inference failed: ${response.statusText}`)
