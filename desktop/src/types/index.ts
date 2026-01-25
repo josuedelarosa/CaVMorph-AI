@@ -1,0 +1,46 @@
+export interface Keypoint {
+  x: number
+  y: number
+  confidence: number
+}
+
+export interface Phenotype {
+  id: number
+  pair: [number, number]
+  name: string
+  value_px: number
+  value_norm: number | null
+}
+
+export interface PredictionResult {
+  image_path: string
+  keypoints: [number, number][]
+  keypoint_scores: number[]
+  extra_pred_fields?: {
+    phenotypes: Phenotype[]
+  }
+  overlay_path?: string
+}
+
+export interface BatchResult {
+  count: number
+  predictions: PredictionResult[]
+}
+
+export interface ExportOptions {
+  format: 'csv' | 'json' | 'images'
+  output_path: string
+  include_overlay: boolean
+}
+
+export interface ModelInfo {
+  dataset_name: string
+  num_keypoints: number
+  keypoint_names: string[]
+  codec_input_size: [number, number]
+  phenotype_pairs: [number, number][]
+  phenotype_scale_by_sl: boolean
+  phenotype_sl_pair: [number, number] | null
+}
+
+export type AnalysisState = 'idle' | 'loading' | 'analyzing' | 'complete' | 'error'

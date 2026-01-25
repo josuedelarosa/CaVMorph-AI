@@ -1,0 +1,55 @@
+{
+  "build": {
+    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run dev",
+    "devPath": "http://localhost:5173"
+  },
+  "package": {
+    "productName": "Fish Morphometrics",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "sidecar": true
+      },
+      "dialog": {
+        "open": true,
+        "save": true
+      },
+      "fs": {
+        "readDir": true,
+        "readFile": true,
+        "writeFile": true,
+        "createDir": true,
+        "exists": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "identifier": "com.cavfish.morphometrics",
+      "targets": [
+        "dmg"
+      ]
+    },
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline';"
+    },
+    "windows": [
+      {
+        "title": "Fish Morphometrics",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "focus": true
+      }
+    ],
+    "updater": {
+      "active": false
+    }
+  }
+}

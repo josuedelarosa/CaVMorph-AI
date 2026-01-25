@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import cv2
@@ -48,6 +49,15 @@ manager = ModelManager(
 )
 
 app = FastAPI()
+
+# Add CORS middleware to allow requests from Tauri frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins (safe for localhost dev)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --------------------------------------------------
 # Safe meta loader (server must not crash if meta is empty/bad)

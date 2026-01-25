@@ -45,27 +45,54 @@ def export_csv(
         for pred in predictions:
             row = {"image_path": pred.get("image_path", "")}
 
-            # Extract keypoints
+            # Extract keypoints - handle nested arrays
             kpts = pred.get("keypoints", [])
             scores = pred.get("keypoint_scores", [])
+            
+            # Flatten if nested: [[[x,y],...]] -> [[x,y],...]
+            if isinstance(kpts, list) and len(kpts) > 0:
+                if isinstance(kpts[0], list) and len(kpts[0]) > 0:
+                    # Check if it's [[x,y], ...] (correct) or [[[x,y], ...]] (nested)
+                    if isinstance(kpts[0][0], list) and len(kpts[0][0]) == 2:
+                        # It's [[[x,y], ...]], flatten to [[x,y], ...]
+                        kpts = kpts[0] if len(kpts) == 1 else kpts
+            
+            # Flatten scores similarly
+            if isinstance(scores, list) and len(scores) > 0:
+                if isinstance(scores[0], list):
+                    # It's [[score1, score2, ...]], flatten to [score1, score2, ...]
+                    scores = scores[0] if len(scores) == 1 else scores
 
             for i, name in enumerate(keypoint_names):
+                x_val = ""
+                y_val = ""
+                conf_val = ""
+                
+                # Extract x, y from keypoint
                 if i < len(kpts):
                     kpt = kpts[i]
-                    if isinstance(kpt, (list, tuple)) and len(kpt) >= 2:
-                        row[f"{name}_x"] = kpt[0]
-                        row[f"{name}_y"] = kpt[1]
-                    else:
-                        row[f"{name}_x"] = ""
-                        row[f"{name}_y"] = ""
-                else:
-                    row[f"{name}_x"] = ""
-                    row[f"{name}_y"] = ""
-
+                    # Handle both [x, y] and [[x, y]] formats
+                    if isinstance(kpt, (list, tuple)):
+                        if len(kpt) >= 2:
+                            # Could be [x, y] or [[x, y]]
+                            if isinstance(kpt[0], (list, tuple)):
+                                # It's [[x, y]]
+                                x_val = float(kpt[0][0]) if len(kpt[0]) > 0 else ""
+                                y_val = float(kpt[0][1]) if len(kpt[0]) > 1 else ""
+                            else:
+                                # It's [x, y]
+                                x_val = float(kpt[0])
+                                y_val = float(kpt[1])
+                
+                # Extract confidence
                 if i < len(scores):
-                    row[f"{name}_conf"] = scores[i]
-                else:
-                    row[f"{name}_conf"] = ""
+                    score = scores[i]
+                    if isinstance(score, (int, float)):
+                        conf_val = float(score)
+                
+                row[f"{name}_x"] = x_val
+                row[f"{name}_y"] = y_val
+                row[f"{name}_conf"] = conf_val
 
             # Extract phenotypes (if available in pred)
             extra_fields = pred.get("extra_pred_fields", {})
