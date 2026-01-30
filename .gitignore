@@ -111,6 +111,7 @@ desktop/node_modules/
 desktop/package-lock.json
 desktop/src-tauri/target/
 desktop/src-tauri/Cargo.lock
+desktop/src-tauri/python_backend/
 *.dmg
 *.app
 *.exe
