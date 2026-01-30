@@ -98,14 +98,21 @@ fn get_resource_dir() -> Option<PathBuf> {
 
 /// Find conda executable
 fn find_conda() -> Option<PathBuf> {
-    // First check app-managed conda
+    // First check app-managed conda (new path)
     let app_conda = get_app_data_dir().join("conda/bin/conda");
     if app_conda.exists() {
         return Some(app_conda);
     }
     
-    // Fallback to system conda
+    // Check old app path for backwards compatibility
     let home = dirs::home_dir()?;
+    let old_app_conda = home.join(".FishMorph/conda/bin/conda");
+    if old_app_conda.exists() {
+        eprintln!("[find_conda] Found conda at old path: {:?}", old_app_conda);
+        return Some(old_app_conda);
+    }
+    
+    // Fallback to system conda
     
     let candidates = [
         home.join("miniforge3/bin/conda"),
@@ -197,13 +204,26 @@ except ImportError as e:
         .join("cavfish_v1")
         .join("weights.pth");
     
-    if !weights_path.exists() {
-        eprintln!("[is_setup_complete] Model weights not found at: {:?}", weights_path);
+    let old_weights_path = dirs::home_dir()
+        .unwrap_or_default()
+        .join(".FishMorph")
+        .join("models")
+        .join("cavfish_v1")
+        .join("weights.pth");
+    
+    let final_weights_path = if weights_path.exists() {
+        weights_path
+    } else if old_weights_path.exists() {
+        eprintln!("[is_setup_complete] Using model weights from old path: {:?}", old_weights_path);
+        old_weights_path
+    } else {
+        eprintln!("[is_setup_complete] Model weights not found at new path: {:?}", weights_path);
+        eprintln!("[is_setup_complete] Model weights not found at old path: {:?}", old_weights_path);
         return false;
-    }
+    };
     
     // Verify weights file is not empty
-    if let Ok(metadata) = fs::metadata(&weights_path) {
+    if let Ok(metadata) = fs::metadata(&final_weights_path) {
         if metadata.len() < 1_000_000 {  // weights.pth should be ~1GB
             eprintln!("[is_setup_complete] Weights file too small: {} bytes", metadata.len());
             return false;
@@ -248,9 +268,11 @@ fn get_python_path() -> Option<PathBuf> {
     let home = dirs::home_dir()?;
     let conda_base = conda_path.parent()?.parent()?;
     let app_data = get_app_data_dir();
+    let old_app_data = home.join(".FishMorph");
     
     let candidates = [
         app_data.join("conda/envs").join(CONDA_ENV_NAME).join("bin/python"),
+        old_app_data.join("conda/envs").join(CONDA_ENV_NAME).join("bin/python"),  // Old path
         home.join(".conda/envs").join(CONDA_ENV_NAME).join("bin/python"),
         conda_base.join("envs").join(CONDA_ENV_NAME).join("bin/python"),
         home.join("miniforge3/envs").join(CONDA_ENV_NAME).join("bin/python"),
@@ -261,10 +283,12 @@ fn get_python_path() -> Option<PathBuf> {
     
     for path in &candidates {
         if path.exists() {
+            eprintln!("[get_python_path] Found Python at: {:?}", path);
             return Some(path.clone());
         }
     }
     
+    eprintln!("[get_python_path] Python not found in any candidate locations");
     None
 }
 
@@ -311,6 +335,15 @@ fn resolve_model_dir() -> Option<PathBuf> {
     let app_data_models = get_app_data_dir().join("models").join("cavfish_v1");
     if app_data_models.exists() {
         return Some(app_data_models);
+    }
+    
+    // Check old path for backwards compatibility
+    if let Some(home) = dirs::home_dir() {
+        let old_models = home.join(".FishMorph").join("models").join("cavfish_v1");
+        if old_models.exists() {
+            eprintln!("[resolve_model_dir] Using models from old path: {:?}", old_models);
+            return Some(old_models);
+        }
     }
 
     if let Some(resource_dir) = get_resource_dir() {
@@ -672,6 +705,30 @@ fn check_xcode_tools_installed() -> Result<bool, String> {
     }
 }
 
+/// Trigger the installation dialog for macOS Command Line Developer Tools
+#[tauri::command]
+fn trigger_xcode_tools_install() -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        // Trigger xcode-select --install dialog
+        match Command::new("xcode-select")
+            .arg("--install")
+            .spawn()
+        {
+            Ok(_) => {
+                Ok("Installation dialog triggered. Please follow the system prompts.".to_string())
+            }
+            Err(e) => {
+                Err(format!("Failed to trigger installation: {}", e))
+            }
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Not applicable on non-macOS systems".to_string())
+    }
+}
+
 #[tauri::command]
 fn get_backend_url(state: tauri::State<AppState>) -> String {
     state.backend_url.lock().unwrap().clone()
@@ -928,6 +985,7 @@ fn main() {
             get_backend_url,
             check_setup_needed,
             check_xcode_tools_installed,
+            trigger_xcode_tools_install,
             check_conda_installed,
             check_conda_env_exists,
             run_first_time_setup,

@@ -7,8 +7,39 @@
         <p class="subtitle">First-time Setup</p>
       </div>
 
+      <!-- Command Line Tools Dialog -->
+      <div v-if="showXcodeToolsDialog" class="xcode-dialog">
+        <div class="dialog-icon">⚠️</div>
+        <h2>Command Line Developer Tools Required</h2>
+        <p>MorphologIA requires macOS Command Line Developer Tools to run conda and compile packages.</p>
+        <div class="dialog-steps">
+          <div class="step-item">
+            <span class="step-num">1</span>
+            <span>Click "Install Tools" below to open the system installation dialog</span>
+          </div>
+          <div class="step-item">
+            <span class="step-num">2</span>
+            <span>Follow the system prompts to complete installation (may take 5-10 minutes)</span>
+          </div>
+          <div class="step-item">
+            <span class="step-num">3</span>
+            <span>Click "Check Again" when installation is complete</span>
+          </div>
+        </div>
+        <div class="dialog-actions">
+          <button @click="installXcodeTools" class="btn-primary">Install Tools</button>
+          <button @click="checkXcodeToolsAgain" class="btn-secondary" :disabled="xcodeToolsChecking">
+            {{ xcodeToolsChecking ? 'Checking...' : 'Check Again' }}
+          </button>
+        </div>
+        <div class="help-note">
+          <strong>Note:</strong> The system dialog may take 10-30 seconds to appear. If nothing happens, 
+          you can also install manually by opening Terminal and running: <code>xcode-select --install</code>
+        </div>
+      </div>
+
       <!-- Choice Screen -->
-      <div v-if="!setupStarted" class="choice-screen">
+      <div v-if="!setupStarted && !showXcodeToolsDialog" class="choice-screen">
         <div class="choice-header">
           <h2>Environment Setup</h2>
           <p>This application requires a conda environment with PyTorch and mmpose.</p>
@@ -143,6 +174,8 @@ const setupStarted = ref(false)
 const condaPath = ref<string>('')
 const hasExistingEnv = ref(false)
 const envCheckComplete = ref(false)
+const showXcodeToolsDialog = ref(false)
+const xcodeToolsChecking = ref(false)
 
 const progressPercent = computed(() => {
   return Math.round((currentStep.value / steps.value.length) * 100)
@@ -177,14 +210,7 @@ const checkEnvironment = async () => {
     try {
       const toolsInstalled = await invoke<boolean>('check_xcode_tools_installed')
       if (!toolsInstalled) {
-        addLog('⚠️ macOS Command Line Developer Tools are not installed', 'error')
-        addLog('', 'error')
-        addLog('Please install them by running in Terminal:', 'error')
-        addLog('  xcode-select --install', 'error')
-        addLog('', 'error')
-        addLog('Or click "Install" when the system dialog appears.', 'error')
-        addLog('Then restart this application.', 'error')
-        setupError.value = true
+        showXcodeToolsDialog.value = true
         statusMessage.value = 'Command Line Developer Tools required'
         return
       }
@@ -290,12 +316,44 @@ const startSetup = async () => {
   }
 }
 
+const installXcodeTools = async () => {
+  try {
+    await invoke('trigger_xcode_tools_install')
+    addLog('⏳ System dialog opened. Please follow the installation prompts.', 'info')
+    addLog('This may take several minutes. The dialog will appear shortly...', 'info')
+  } catch (err) {
+    addLog(`Failed to trigger installation: ${err}`, 'error')
+  }
+}
+
+const checkXcodeToolsAgain = async () => {
+  xcodeToolsChecking.value = true
+  try {
+    const toolsInstalled = await invoke<boolean>('check_xcode_tools_installed')
+    if (toolsInstalled) {
+      showXcodeToolsDialog.value = false
+      addLog('✓ Command Line Developer Tools detected!', 'success')
+      // Continue with environment check
+      await checkEnvironment()
+    } else {
+      addLog('⚠️ Tools not yet installed. Please complete the installation first.', 'warning')
+    }
+  } catch (err) {
+    addLog(`Check failed: ${err}`, 'error')
+  } finally {
+    xcodeToolsChecking.value = false
+  }
+}
+
 const retrySetup = () => {
   setupError.value = false
+  setupComplete.value = false
+  setupStarted.value = false
   steps.value.forEach(s => s.error = false)
   currentStep.value = 0
   logs.value = []
-  startSetup()
+  showXcodeToolsDialog.value = false
+  checkEnvironment()
 }
 
 const openLogs = async () => {
@@ -658,5 +716,99 @@ onMounted(() => {
 
 .help-text strong {
   font-weight: 600;
+}
+
+/* Command Line Tools Dialog */
+.xcode-dialog {
+  background: white;
+  border: 2px solid #ff9800;
+  border-radius: 12px;
+  padding: 32px;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.dialog-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.xcode-dialog h2 {
+  color: #1a1a2e;
+  font-size: 20px;
+  margin: 0 0 16px 0;
+}
+
+.xcode-dialog > p {
+  color: #666;
+  font-size: 14px;
+  margin: 0 0 24px 0;
+  line-height: 1.6;
+}
+
+.dialog-steps {
+  text-align: left;
+  background: #f5f5f5;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #ddd;
+}
+
+.step-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.step-num {
+  background: #ff9800;
+  color: white;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.step-item span:last-child {
+  color: #333;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.help-note {
+  background: #fff3e0;
+  border: 1px solid #ffb74d;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+  color: #e65100;
+  text-align: left;
+}
+
+.help-note code {
+  background: #ffe0b2;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 11px;
 }
 </style>
