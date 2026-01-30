@@ -1,116 +1,150 @@
 #!/bin/bash
-# Build script for Fish Morphometrics Desktop App
-# Requires: conda environment 'cavfish310' to be active
-
 set -e
 
-echo "🔨 Building Fish Morphometrics Desktop App"
-echo "=========================================="
+# ==============================================================================
+# Fish Morphometrics - Build Script (macOS)
+# ==============================================================================
+# This script builds the macOS application bundle (DMG) that uses your existing
+# conda environment (cavfish310) instead of bundling Python.
+# 
+# Build approach:
+# 1. The DMG contains:
+#    - Tauri desktop app
+#    - setup_first_run.py (for first-run conda env verification/creation)
+#    - Backend source code (bundled in Resources)
+#    - Model config files (bundled in Resources)
+#    - Optionally: model weights (if present, reduces first-run download)
+# 
+# 2. On first launch, the app:
+#    - Checks if cavfish310 conda environment exists
+#    - If missing or incomplete, runs setup_first_run.py to create it
+#    - Starts backend using Python from cavfish310 environment
+#    - Connects frontend to backend
+# 
+# Prerequisites:
+# - macOS with conda/miniforge installed
+# - cavfish310 environment already set up (recommended)
+# - Node.js and npm
+# - Rust toolchain (cargo)
+# - Xcode Command Line Tools
+# ==============================================================================
 
-# Colors for output
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
+echo "╔═══════════════════════════════════════════════════════════════╗"
+echo "║     Fish Morphometrics - Build Script                         ║"
+echo "╚═══════════════════════════════════════════════════════════════╝"
+echo ""
 
-# Activate conda environment
-activate_conda_env() {
-    echo -e "${BLUE}Activating conda environment 'cavfish310'...${NC}"
-    eval "$(conda shell.bash hook)"
-    if ! conda activate cavfish310 2>/dev/null; then
-        echo -e "${RED}❌ Failed to activate conda environment 'cavfish310'${NC}"
-        echo "Please ensure conda is installed and the environment exists:"
-        echo "  conda env list"
-        exit 1
+# Navigate to project root
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
+
+# Cleanup any stale DMG mounts before building
+echo "🧹 Cleaning up any previous DMG mounts..."
+hdiutil detach "/Volumes/Fish Morphometrics" 2>/dev/null || true
+rm -f desktop/src-tauri/target/release/bundle/dmg/*.dmg 2>/dev/null || true
+
+# Check dependencies
+echo "📋 Checking build dependencies..."
+
+if ! command -v node &> /dev/null; then
+    echo "❌ Node.js is not installed. Please install it first."
+    exit 1
+fi
+echo "  ✓ Node.js $(node --version)"
+
+if ! command -v npm &> /dev/null; then
+    echo "❌ npm is not installed. Please install it first."
+    exit 1
+fi
+echo "  ✓ npm $(npm --version)"
+
+if ! command -v rustc &> /dev/null; then
+    echo "❌ Rust is not installed. Please install it first."
+    echo "  Run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+    exit 1
+fi
+echo "  ✓ Rust $(rustc --version)"
+
+if ! command -v cargo &> /dev/null; then
+    echo "❌ Cargo is not installed. Please install Rust first."
+    exit 1
+fi
+echo "  ✓ Cargo $(cargo --version | head -n1)"
+
+# Check for model weights (optional - can be downloaded on first run)
+if [ -f "models/cavfish_v1/weights.pth" ]; then
+    WEIGHTS_SIZE=$(du -h "models/cavfish_v1/weights.pth" | cut -f1)
+    echo "  ✓ Model weights found (${WEIGHTS_SIZE})"
+    echo "    Will be bundled in app to avoid first-run download."
+else
+    echo "  ⚠ Model weights not found"
+    echo "    Users will need to download them on first run."
+fi
+
+# Verify setup script exists
+if [ ! -f "desktop/setup_first_run.py" ]; then
+    echo "❌ desktop/setup_first_run.py not found!"
+    exit 1
+fi
+echo "  ✓ Setup script found"
+
+# Check for conda (recommended for building/testing)
+if command -v conda &> /dev/null; then
+    echo "  ✓ Conda found ($(conda --version))"
+    if conda env list | grep -q "cavfish310"; then
+        echo "  ✓ cavfish310 environment exists"
+    else
+        echo "  ⚠ cavfish310 environment not found (will be created on first run)"
     fi
-    echo -e "${GREEN}✓ Conda environment activated${NC}"
-}
+else
+    echo "  ⚠ Conda not found (required for end users)"
+fi
 
-# Check prerequisites
-check_prerequisites() {
-    echo -e "${BLUE}Checking prerequisites...${NC}"
-    
-    # Check Node.js
-    if ! command -v node &> /dev/null; then
-        echo -e "${YELLOW}⚠️  Node.js not found. Please install Node.js 16+${NC}"
-        exit 1
-    fi
-    echo -e "${GREEN}✓ Node.js $(node --version)${NC}"
-    
-    # Check Python in conda env
-    if ! command -v python3 &> /dev/null; then
-        echo -e "${YELLOW}⚠️  Python 3 not found in conda environment${NC}"
-        exit 1
-    fi
-    echo -e "${GREEN}✓ Python $(python3 --version)${NC}"
-    
-    # Check Rust/Cargo
-    if ! command -v cargo &> /dev/null; then
-        echo -e "${YELLOW}⚠️  Rust/Cargo not found. Please install Rust 1.60+${NC}"
-        exit 1
-    fi
-    echo -e "${GREEN}✓ Cargo $(cargo --version)${NC}"
-}
+echo ""
+echo "📦 Installing frontend dependencies..."
+cd desktop
+npm install
 
-# Build backend binary
-build_backend() {
-    echo ""
-    echo -e "${BLUE}Building backend binary with PyInstaller...${NC}"
-    
-    if [ ! -f "backend/api/cli.spec" ]; then
-        echo -e "${YELLOW}⚠️  cli.spec not found${NC}"
-        return 1
-    fi
-    
-    python3 -m pip install pyinstaller -q
-    python3 -m pyinstaller backend/api/cli.spec --distpath dist || return 1
-    
-    echo -e "${GREEN}✓ Backend binary created${NC}"
-}
+echo ""
+echo "🔨 Building frontend..."
+npm run build
 
-# Build frontend
-build_frontend() {
-    echo ""
-    echo -e "${BLUE}Building frontend...${NC}"
-    
-    cd desktop
-    npm install || return 1
-    npm run build || return 1
-    cd ..
-    
-    echo -e "${GREEN}✓ Frontend built${NC}"
-}
+echo ""
+echo "🦀 Building Tauri application..."
+npm run tauri build
+cd ..
 
-# Build Tauri app
-build_tauri() {
-    echo ""
-    echo -e "${BLUE}Building Tauri application...${NC}"
-    
-    cd desktop/src-tauri
-    cargo tauri build || return 1
-    cd ../..
-    
-    echo -e "${GREEN}✓ Tauri app built${NC}"
-}
+echo ""
+echo "✅ Build complete!"
+echo ""
+echo "📍 Output location:"
+echo "   desktop/src-tauri/target/release/bundle/dmg/"
+echo ""
 
-# Main build flow
-main() {
-    activate_conda_env
-    check_prerequisites
-    build_backend || { echo -e "${YELLOW}Backend build failed${NC}"; return 1; }
-    build_frontend || { echo -e "${YELLOW}Frontend build failed${NC}"; return 1; }
-    build_tauri || { echo -e "${YELLOW}Tauri build failed${NC}"; return 1; }
-    
+# Find the DMG
+DMG_PATH=$(find desktop/src-tauri/target/release/bundle/dmg -name "*.dmg" 2>/dev/null | head -n1)
+if [ -n "$DMG_PATH" ]; then
+    DMG_SIZE=$(du -h "$DMG_PATH" | cut -f1)
+    echo "📀 DMG: $DMG_PATH"
+    echo "   Size: $DMG_SIZE"
     echo ""
-    echo -e "${GREEN}=========================================="
-    echo "✓ Build successful!"
-    echo "=========================================${NC}"
+    echo "To install:"
+    echo "1. Open the DMG file"
+    echo "2. Drag Fish Morphometrics to Applications"
+    echo "3. Ensure Miniforge/Conda is installed: brew install --cask miniforge"
+    echo "4. Launch the app - it will:"
+    echo "   - Detect/verify cavfish310 conda environment"
+    echo "   - If missing: create environment, install PyTorch + mmpose + dependencies"
+    echo "   - If present: use existing environment directly"
+    echo "   - Start backend and show GUI"
     echo ""
-    echo "📦 Packages created in:"
-    echo "  - target/release/bundle/"
+    echo "Prerequisites for end users:"
+    echo "  - macOS 10.15 or later (arm64 or x86_64)"
+    echo "  - Conda/Miniforge installed (required)"
     echo ""
-    echo "For more details, see DEPLOYMENT.md"
-}
-
-main
+    echo "For developers:"
+    echo "  - Pre-create cavfish310 env to skip first-run setup"
+    echo "  - Use your existing conda setup script"
+else
+    echo "⚠️  DMG not found in expected location"
+fi

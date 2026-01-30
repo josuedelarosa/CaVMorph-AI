@@ -1,5 +1,13 @@
 <template>
-  <div id="app-container" :class="{ dark: isDarkMode }">
+  <!-- First Run Setup View -->
+  <SetupView 
+    v-if="needsSetup" 
+    @setup-complete="onSetupComplete"
+    @setup-error="onSetupError"
+  />
+  
+  <!-- Main App (shown after setup is complete) -->
+  <div v-else id="app-container" :class="{ dark: isDarkMode }">
     <!-- Header -->
     <header class="app-header">
       <div class="header-content">
@@ -8,9 +16,12 @@
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z" fill="currentColor"/>
             <circle cx="12" cy="12" r="3" fill="currentColor"/>
           </svg>
-          <h1>Fish Morphometrics</h1>
+          <h1>MorphologIA</h1>
         </div>
         <div class="header-actions">
+          <button class="icon-btn" @click="showDebugConsole = !showDebugConsole" title="Toggle Debug Console">
+            {{ showDebugConsole ? '📋' : '🔍' }}
+          </button>
           <button class="icon-btn" @click="showSettings = true" title="Profile settings">
             ⚙️
           </button>
@@ -21,6 +32,24 @@
         </div>
       </div>
     </header>
+
+    <!-- Debug Console -->
+    <div v-if="showDebugConsole" class="debug-console">
+      <div class="debug-header">
+        <strong>🔍 Debug Console</strong>
+        <div>
+          <button @click="debugLogs = []" class="btn-sm">Clear</button>
+          <button @click="showDebugConsole = false" class="btn-sm">Close</button>
+        </div>
+      </div>
+      <div class="debug-content">
+        <div v-for="(log, idx) in debugLogs.slice(-100)" :key="idx" class="debug-log" :class="log.level">
+          <span class="log-time">{{ log.time }}</span>
+          <span class="log-message">{{ log.message }}</span>
+        </div>
+        <div v-if="debugLogs.length === 0" class="debug-empty">No logs yet</div>
+      </div>
+    </div>
 
     <!-- Main Content -->
     <main class="app-main">
@@ -46,7 +75,13 @@
         <!-- Analysis Controls -->
         <section v-if="state !== 'loading' || predictions.length" class="control-section">
           <h2>1. Select Images</h2>
-          <div class="profiles-group">
+          
+          <!-- Show warning if no active profiles -->
+          <div v-if="activeProfiles.length === 0" class="warning-message">
+            <p>⚠️ No active profiles configured. Go to Settings (⚙️) to create or enable a profile.</p>
+          </div>
+          
+          <div v-else class="profiles-group">
             <div v-for="profile in activeProfiles" :key="profile.id" class="profile-folder-item">
               <div class="profile-header">
                 <span class="profile-name">{{ profile.name }}</span>
@@ -133,10 +168,18 @@
           </div>
 
           <!-- 3-Column Layout: Canvas (left) | Details (middle) | Preview List (right) -->
-          <div class="results-layout-3col">
-            <!-- Left Column: Canvas -->
-            <div class="layout-column canvas-column">
-              <div v-if="selectedPrediction" class="canvas-wrapper">
+          <div class="results-layout-2col" :class="{ 'focus-mode': focusMode }">
+            <!-- Main: Large Preview -->
+            <div class="main-preview">
+              <div class="preview-header">
+                <div class="preview-title" v-if="selectedPrediction">
+                  {{ getFilename(selectedPrediction.image_path) }}
+                </div>
+                <button class="btn-icon" @click="focusMode = !focusMode" :title="focusMode ? 'Show sidebar' : 'Focus mode'">
+                  {{ focusMode ? '⬅️' : '⬆️' }}
+                </button>
+              </div>
+              <div v-if="selectedPrediction" class="canvas-container">
                 <canvas 
                   ref="previewCanvas"
                   class="preview-canvas"
@@ -145,59 +188,52 @@
               <div v-else class="empty-canvas">
                 <p>Select an image to view</p>
               </div>
-            </div>
-
-            <!-- Middle Column: Details & Metrics -->
-            <div class="layout-column details-column">
-              <div v-if="selectedPrediction">
-                <div class="info-header">
-                  <h4>{{ getFilename(selectedPrediction.image_path) }}</h4>
-                  <p class="path-text">{{ selectedPrediction.image_path }}</p>
+              <div class="preview-footer" v-if="selectedPrediction">
+                <div class="metric-inline">
+                  <span class="metric-label">Keypoints:</span>
+                  <span class="metric-value">{{ keypointCount }}/20</span>
                 </div>
-                
-                <div class="metrics">
-                  <div class="metric-card">
-                    <div class="metric-label">Keypoints</div>
-                    <div class="metric-value">{{ keypointCount }}/20</div>
-                  </div>
-                  <div class="metric-card">
-                    <div class="metric-label">Confidence</div>
-                    <div class="metric-value">{{ avgConfidence }}%</div>
-                  </div>
-                  <div class="metric-card">
-                    <div class="metric-label">Phenotypes</div>
-                    <div class="metric-value">{{ phenotypeCount }}</div>
-                  </div>
+                <div class="metric-inline">
+                  <span class="metric-label">Confidence:</span>
+                  <span class="metric-value">{{ avgConfidence }}%</span>
                 </div>
-              </div>
-              <div v-else class="empty-details">
-                <p>Select an image</p>
+                <div class="metric-inline">
+                  <span class="metric-label">Phenotypes:</span>
+                  <span class="metric-value">{{ phenotypeCount }}</span>
+                </div>
               </div>
             </div>
 
-            <!-- Right Column: Scrollable Preview List -->
-            <div class="layout-column preview-list-column">
-              <h4>Images</h4>
-              <div class="preview-list">
-                <div 
+            <!-- Sidebar: Image List -->
+            <div class="sidebar" v-if="!focusMode">
+              <div class="sidebar-header">
+                <h4>Images ({{ filteredPredictions.length }})</h4>
+              </div>
+              <div class="image-grid">
+                <button 
                   v-for="(pred, idx) in filteredPredictions" 
                   :key="idx"
-                  class="preview-item-wrapper"
+                  class="image-thumb"
+                  :class="{ active: selectedPredictionIdx === idx }"
+                  @click="selectPredictionFromFiltered(idx, pred)"
+                  :title="getFilename(pred.image_path)"
                 >
-                  <button 
-                    class="preview-item"
-                    :class="{ active: selectedPredictionIdx === idx }"
-                    @click="selectPredictionFromFiltered(idx, pred)"
-                    :title="getFilename(pred.image_path)"
-                  >
-                    <div class="preview-item-name">
-                      {{ getFilename(pred.image_path) }}
+                  <div class="thumb-placeholder">
+                    <img 
+                      v-if="pred.overlay_png_base64" 
+                      :src="`data:image/jpeg;base64,${pred.overlay_png_base64}`"
+                      alt="Thumbnail"
+                      class="thumb-image"
+                    />
+                    <span v-else class="thumb-number">{{ idx + 1 }}</span>
+                  </div>
+                  <div class="thumb-info">
+                    <div class="thumb-name">{{ getFilename(pred.image_path).substring(0, 20) }}{{ getFilename(pred.image_path).length > 20 ? '...' : '' }}</div>
+                    <div class="thumb-meta">
+                      {{ getKeypointCount(pred) }}/20 • {{ getAvgConfidence(pred) }}% • {{ getPhenotypeCount(pred) }}p
                     </div>
-                    <div class="preview-item-meta">
-                      {{ pred.keypoints?.length || 0 }} kpts
-                    </div>
-                  </button>
-                </div>
+                  </div>
+                </button>
               </div>
             </div>
           </div>
@@ -229,9 +265,24 @@
       </div>
     </main>
 
+    <!-- Debug Console -->
+    <div v-if="showDebugConsole" class="debug-console">
+      <div class="debug-header">
+        <strong>Debug Console</strong>
+        <button @click="debugLogs = []" class="btn-sm">Clear</button>
+        <button @click="showDebugConsole = false" class="btn-sm">Close</button>
+      </div>
+      <div class="debug-content">
+        <div v-for="(log, idx) in debugLogs.slice(-100)" :key="idx" class="debug-log" :class="log.level">
+          <span class="log-time">{{ log.time }}</span>
+          <span class="log-message">{{ log.message }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Footer -->
     <footer class="app-footer">
-      <p>Fish Morphometrics v0.1.0 | Backend: <span :class="backendStatus">{{ backendStatusText }}</span></p>
+      <p>MorphologIA v0.1.0 | Backend: <span :class="backendStatus">{{ backendStatusText }}</span></p>
     </footer>
 
     <!-- Settings Modal -->
@@ -249,8 +300,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { invoke } from '@tauri-apps/api/tauri'
 import { open } from '@tauri-apps/api/dialog'
 import { readBinaryFile } from '@tauri-apps/api/fs'
+import { homeDir } from '@tauri-apps/api/path'
 import type { PredictionResult, ModelInfo, AnalysisState, Profile } from './types'
 import { 
   analyzeFolder, 
@@ -260,6 +313,7 @@ import {
   exportAnnotatedImages 
 } from './utils/api'
 import SettingsModal from './components/SettingsModal.vue'
+import SetupView from './views/SetupView.vue'
 import {
   loadConfig,
   saveConfig,
@@ -269,6 +323,9 @@ import {
   setActiveProfile,
   setDarkMode,
 } from './utils/storage'
+
+// Setup State
+const needsSetup = ref(true)  // Default to showing setup, will be checked on mount
 
 // State
 const state = ref<AnalysisState>('loading')
@@ -286,10 +343,30 @@ const modelInfo = ref<ModelInfo | null>(null)
 const backendReady = ref(false)
 const previewCanvas = ref<HTMLCanvasElement | null>(null)
 const showSettings = ref(false)
+const showDebugConsole = ref(false)
+const debugLogs = ref<Array<{time: string, level: string, message: string}>>([])
 const profiles = ref<Profile[]>([])
 const activeProfileId = ref('default')
 const selectedKeypoints = ref<Set<number>>(new Set())
 const selectedProfileFilter = ref('')
+
+// Intercept console.log/error/warn for debug panel
+const originalLog = console.log
+const originalError = console.error
+const originalWarn = console.warn
+
+console.log = (...args: any[]) => {
+  debugLogs.value.push({ time: new Date().toLocaleTimeString(), level: 'log', message: args.join(' ') })
+  originalLog(...args)
+}
+console.error = (...args: any[]) => {
+  debugLogs.value.push({ time: new Date().toLocaleTimeString(), level: 'error', message: args.join(' ') })
+  originalError(...args)
+}
+console.warn = (...args: any[]) => {
+  debugLogs.value.push({ time: new Date().toLocaleTimeString(), level: 'warn', message: args.join(' ') })
+  originalWarn(...args)
+}
 
 // Computed
 const selectedPrediction = computed(() => {
@@ -335,25 +412,41 @@ const backendStatus = computed(() =>
   backendReady.value ? 'status-ready' : 'status-pending'
 )
 
-const keypointCount = computed(() => {
-  if (!selectedPrediction.value) return 0
-  // Get the selected profile to check which keypoints are enabled
-  let selectedProfileId = selectedProfileFilter.value
-  if (!selectedProfileId && selectedPrediction.value.profile_id) {
-    selectedProfileId = selectedPrediction.value.profile_id
-  }
-  
-  const activeProfile = profiles.value.find(p => p.id === selectedProfileId)
-  if (activeProfile) {
-    return activeProfile.selected_keypoints.length
-  }
-  
-  // Fallback to raw count
-  const scores = selectedPrediction.value.keypoint_scores || []
+const focusMode = ref(false)
+
+// Helper function to get keypoint count for any prediction
+function getKeypointCount(pred: PredictionResult): number {
+  const scores = pred.keypoint_scores || []
   if (Array.isArray(scores) && scores.length > 0 && Array.isArray(scores[0])) {
     return scores[0].length
   }
   return scores.length
+}
+
+// Helper function to get average confidence for any prediction
+function getAvgConfidence(pred: PredictionResult): string {
+  const scores = pred.keypoint_scores || []
+  let allScores: number[] = []
+  
+  if (Array.isArray(scores) && scores.length > 0 && Array.isArray(scores[0])) {
+    allScores = scores[0]
+  } else if (Array.isArray(scores)) {
+    allScores = scores as number[]
+  }
+  
+  if (allScores.length === 0) return 'N/A'
+  const avg = allScores.reduce((a, b) => a + b, 0) / allScores.length
+  return (avg * 100).toFixed(0)
+}
+
+// Helper function to get phenotype count for any prediction
+function getPhenotypeCount(pred: PredictionResult): number {
+  return pred.extra_pred_fields?.phenotypes?.length || 0
+}
+
+const keypointCount = computed(() => {
+  if (!selectedPrediction.value) return 0
+  return getKeypointCount(selectedPrediction.value)
 })
 
 const phenotypeCount = computed(() => {
@@ -553,6 +646,28 @@ async function startAnalysis() {
         ...pred,
         profile_id: profile.id,
       }))
+      
+      // Log first prediction to check if overlay_png_base64 is present
+      if (withProfile.length > 0) {
+        const first = withProfile[0]
+        console.log('📦 First prediction data:', {
+          image_path: first.image_path,
+          has_overlay_base64: !!first.overlay_png_base64,
+          overlay_length: first.overlay_png_base64?.length || 0,
+          overlay_preview: first.overlay_png_base64 ? first.overlay_png_base64.substring(0, 50) + '...' : 'none',
+          has_keypoints: !!first.keypoints,
+          keypoint_count: first.keypoints?.length || 0
+        })
+        
+        // TEST: Try to create an image immediately to verify data
+        if (first.overlay_png_base64) {
+          const testImg = new Image()
+          testImg.onload = () => console.log('✅ TEST: Base64 image loads OK:', testImg.width, 'x', testImg.height)
+          testImg.onerror = (e) => console.error('❌ TEST: Base64 image failed to load:', e)
+          testImg.src = 'data:image/jpeg;base64,' + first.overlay_png_base64
+        }
+      }
+      
       allPredictions.push(...withProfile)
       totalProcessed += result.count
     }
@@ -617,7 +732,10 @@ async function exportResults(format: 'csv' | 'json' | 'images') {
         outputPath = `${baseDir}/results_${profile.name}_${timestamp}`
       } else {
         const filename = `${profile.name}_results_${timestamp}`
-        outputPath = `/tmp/${filename}.${format}`
+        const documentsDir = await homeDir()
+        const exportDir = `${documentsDir}/Documents/MorphologIA`
+        // Create directory if it doesn't exist (handled by backend)
+        outputPath = `${exportDir}/${filename}.${format}`
       }
 
       if (format === 'csv') {
@@ -651,18 +769,68 @@ function drawPreview() {
   const ctx = canvas.getContext('2d')
   if (!ctx) return
 
-  // Get canvas dimensions from DOM
+  // Get canvas container dimensions
   const rect = canvas.getBoundingClientRect()
   const dpr = window.devicePixelRatio || 1
   
-  canvas.width = (rect.width || 600) * dpr
-  canvas.height = (rect.height || 350) * dpr
+  // Use container size for display
+  const displayWidth = Math.max(rect.width || 800, 800)
+  const displayHeight = Math.max(rect.height || 600, 600)
+  
+  canvas.width = displayWidth * dpr
+  canvas.height = displayHeight * dpr
+  canvas.style.width = displayWidth + 'px'
+  canvas.style.height = displayHeight + 'px'
   
   ctx.scale(dpr, dpr)
 
-  // Try to load and draw image from file path
+  // Prefer overlay_png_base64 from backend if available
+  console.log('🖼️ drawPreview called:', {
+    has_overlay_base64: !!pred.overlay_png_base64,
+    overlay_length: pred.overlay_png_base64?.length || 0,
+    image_path: pred.image_path
+  })
+  
+  if (pred.overlay_png_base64) {
+    console.log('✅ Using overlay_png_base64 from backend, length:', pred.overlay_png_base64.length)
+    const img = new Image()
+    // Backend sends JPEG-compressed overlays, not PNG
+    img.src = 'data:image/jpeg;base64,' + pred.overlay_png_base64
+    
+    img.onload = () => {
+      console.log('✅ Overlay image loaded successfully:', img.width, 'x', img.height)
+      const displayWidth = canvas.width / dpr
+      const displayHeight = canvas.height / dpr
+      
+      // Scale image to fit canvas
+      const scale = Math.min(displayWidth / img.width, displayHeight / img.height)
+      const scaledWidth = img.width * scale
+      const scaledHeight = img.height * scale
+      const x = (displayWidth - scaledWidth) / 2
+      const y = (displayHeight - scaledHeight) / 2
+      
+      // Draw background
+      ctx.fillStyle = '#e0e0e0'
+      ctx.fillRect(0, 0, displayWidth, displayHeight)
+      
+      // Draw scaled image centered
+      ctx.drawImage(img, x, y, scaledWidth, scaledHeight)
+      console.log('✅ Canvas drawing complete')
+    }
+    
+    img.onerror = (e) => {
+      console.error('❌ Failed to load overlay image from base64:', e)
+      console.error('Base64 preview:', pred.overlay_png_base64.substring(0, 100) + '...')
+      loadImageFromPath()
+    }
+    return
+  }
+  
+  // Fallback: Try to load and draw image from file path
+  function loadImageFromPath() {
+  console.log('⚠️ No overlay_png_base64, falling back to file path loading')
   const imagePath = pred.image_path
-  console.log('drawCanvas - imagePath:', imagePath)
+  console.log('📂 Loading from path:', imagePath)
   
   if (imagePath) {
     const img = new Image()
@@ -690,41 +858,25 @@ function drawPreview() {
       })
     
     img.onload = () => {
-      console.log('Image loaded successfully:', imagePath)
-      
+      console.log('Image loaded successfully from file:', imagePath)
       const displayWidth = canvas.width / dpr
       const displayHeight = canvas.height / dpr
       
-      // Calculate scale to fit image in canvas while maintaining aspect ratio
-      const imgAspect = img.width / img.height
-      const canvasAspect = displayWidth / displayHeight
+      // Scale image to fit
+      const scale = Math.min(displayWidth / img.width, displayHeight / img.height)
+      const scaledWidth = img.width * scale
+      const scaledHeight = img.height * scale
+      const offsetX = (displayWidth - scaledWidth) / 2
+      const offsetY = (displayHeight - scaledHeight) / 2
       
-      let drawWidth = displayWidth
-      let drawHeight = displayHeight
-      let offsetX = 0
-      let offsetY = 0
-      
-      if (imgAspect > canvasAspect) {
-        // Image wider than canvas - fit to width
-        drawWidth = displayWidth
-        drawHeight = displayWidth / imgAspect
-        offsetY = (displayHeight - drawHeight) / 2
-      } else {
-        // Image taller than canvas - fit to height
-        drawHeight = displayHeight
-        drawWidth = displayHeight * imgAspect
-        offsetX = (displayWidth - drawWidth) / 2
-      }
-      
-      // Draw gray background first
+      // Draw background
       ctx.fillStyle = '#f0f0f0'
       ctx.fillRect(0, 0, displayWidth, displayHeight)
       
-      // Draw image centered
-      ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight)
+      // Draw scaled image
+      ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight)
       
-      // Draw keypoints with correct scale
-      const scale = drawWidth / img.width
+      // Draw keypoints with scale
       drawKeypointsOnCanvas(ctx, pred, canvas, img, scale, offsetX, offsetY, dpr)
     }
     
@@ -743,6 +895,9 @@ function drawPreview() {
     ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr)
     drawKeypointsOnCanvas(ctx, pred, canvas, null, 1, 0, 0, dpr)
   }
+  }
+  
+  loadImageFromPath()
 }
 
 function drawKeypointsOnCanvas(
@@ -801,19 +956,60 @@ function drawKeypointsOnCanvas(
     const px = offsetX + (x * scale)
     const py = offsetY + (y * scale)
 
-    // Draw circle
-    ctx.fillStyle = score > 0.5 ? '#00ff00' : '#ffff00'
-    ctx.strokeStyle = '#000000'
-    ctx.lineWidth = 1
+    // Calculate normalized keypoint size based on canvas dimensions
+    const canvasAvg = (canvas.width + canvas.height) / (2 * dpr)
+    const baseSize = Math.max(3, Math.min(10, canvasAvg / 100))
+    
+    // Debug logging for first keypoint
+    if (i === 0) {
+      console.log(`[Keypoint Debug] Canvas: ${canvas.width}x${canvas.height}, DPR: ${dpr}, Avg: ${canvasAvg}, BaseSize: ${baseSize}, Score: ${score}`)
+    }
+    
+    // Confidence-based color: red (low) -> orange (mid) -> green (high)
+    let color: string
+    if (score < 0.5) {
+      // Red to orange for low confidence (0-50%)
+      const intensity = Math.floor(score * 2 * 255)
+      color = `rgb(255, ${intensity}, 0)`
+    } else {
+      // Orange to green for high confidence (50-100%)
+      const intensity = Math.floor((score - 0.5) * 2 * 255)
+      color = `rgb(${255 - intensity}, 255, 0)`
+    }
+    
+    // Draw outer glow for better visibility
+    ctx.shadowColor = color
+    ctx.shadowBlur = baseSize * 1.5
+    
+    // Draw keypoint circle
+    ctx.fillStyle = color
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)'
+    ctx.lineWidth = Math.max(1, baseSize * 0.2)
     ctx.beginPath()
-    ctx.arc(px, py, 4, 0, Math.PI * 2)
+    ctx.arc(px, py, baseSize, 0, Math.PI * 2)
     ctx.fill()
     ctx.stroke()
-
-    // Draw label
-    ctx.fillStyle = '#000000'
-    ctx.font = 'bold 10px sans-serif'
-    ctx.fillText(`${i + 1}`, px + 6, py + 4)
+    
+    // Draw white center dot for clarity
+    ctx.shadowBlur = 0
+    ctx.fillStyle = 'white'
+    ctx.beginPath()
+    ctx.arc(px, py, baseSize * 0.35, 0, Math.PI * 2)
+    ctx.fill()
+    
+    // Draw keypoint number with outline for readability
+    ctx.shadowBlur = 0
+    ctx.fillStyle = 'white'
+    ctx.strokeStyle = 'black'
+    ctx.lineWidth = Math.max(2, baseSize * 0.3)
+    ctx.font = `bold ${Math.max(10, baseSize * 1.8)}px sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.strokeText(`${i + 1}`, px, py - baseSize * 2.2)
+    ctx.fillText(`${i + 1}`, px, py - baseSize * 2.2)
+    
+    // Reset shadow
+    ctx.shadowBlur = 0
   }
 
   // Draw confidence info
@@ -827,24 +1023,56 @@ function drawKeypointsOnCanvas(
 }
 
 async function initializeBackend() {
-  try {
-    // Try to load model info
-    modelInfo.value = await getModelInfo()
-    backendReady.value = true
-    state.value = 'idle'
-    errorMessage.value = ''
-  } catch (err) {
-    // Don't retry forever - just show error once and continue
-    console.error('Failed to load model info:', err)
-    errorMessage.value = `Backend connection error: ${err}`
-    // Still mark as loaded so UI is visible
-    state.value = 'idle'
-    backendReady.value = false
-    // Try again after 5 seconds
-    setTimeout(() => {
-      initializeBackend()
-    }, 5000)
+  const maxRetries = 12  // 12 * 2s = 24 seconds max wait
+  let retries = 0
+  
+  const attemptConnection = async () => {
+    try {
+      // Show status in UI
+      if (retries > 0) {
+        errorMessage.value = `Connecting to backend... (attempt ${retries}/${maxRetries})`
+      }
+      
+      // Try to load model info
+      modelInfo.value = await getModelInfo()
+      backendReady.value = true
+      state.value = 'idle'
+      errorMessage.value = ''
+      console.log('✓ Backend connected successfully')
+    } catch (err) {
+      retries++
+      
+      // Extract detailed error information
+      let errorDetails = 'Unknown error'
+      if (err instanceof Error) {
+        errorDetails = `${err.name}: ${err.message}`
+        console.error(`[${retries}/${maxRetries}] Error details:`, {
+          name: err.name,
+          message: err.message,
+          stack: err.stack
+        })
+      }
+      
+      console.log(`Backend connection attempt ${retries}/${maxRetries} failed:`, errorDetails)
+      
+      if (retries < maxRetries) {
+        // Still waiting for backend to start - retry in 2 seconds
+        errorMessage.value = `Connecting... (${retries}/${maxRetries}) ${errorDetails}`
+        setTimeout(attemptConnection, 2000)
+      } else {
+        // Max retries reached - show error
+        console.error('Failed to connect to backend after max retries:', err)
+        errorMessage.value = `⚠️ Backend connection error: ${errorDetails}`
+        state.value = 'idle'
+        backendReady.value = false
+        // Try one more time after 10 seconds in case backend is slow
+        setTimeout(attemptConnection, 10000)
+      }
+    }
   }
+  
+  // Start trying
+  attemptConnection()
 }
 
 function toggleDarkMode() {
@@ -908,41 +1136,105 @@ async function handleDeleteProfile(profileId: string) {
   }
 }
 
-onMounted(async () => {
-  // Load config
+// Setup handlers
+async function checkIfSetupNeeded(): Promise<boolean> {
   try {
-    const config = await loadConfig()
-    isDarkMode.value = config.darkMode
-    profiles.value = config.profiles.map(p => ({
-      ...p,
-      selected_keypoints: p.selected_keypoints || p.selectedKeypoints || [],
-      enabled: p.enabled !== undefined ? p.enabled : true,
-    }))
-    activeProfileId.value = config.activeProfileId
-    
-    // Initialize profile filter to first active profile
-    const activeProfiles = profiles.value.filter(p => p.enabled)
-    if (activeProfiles.length > 0) {
-      selectedProfileFilter.value = activeProfiles[0].id
-    }
-
-    // Load active profile's keypoints
-    const activeProfile = profiles.value.find(p => p.id === config.activeProfileId)
-    if (activeProfile) {
-      selectedKeypoints.value = new Set(activeProfile.selected_keypoints || activeProfile.selectedKeypoints)
-    }
+    return await invoke<boolean>('check_setup_needed')
   } catch (err) {
-    console.error('Failed to load config:', err)
+    console.error('Failed to check setup status:', err)
+    // Assume setup is NOT needed if we can't check (dev mode)
+    return false
   }
+}
 
-  // Initialize backend immediately but don't block UI
+function onSetupComplete() {
+  needsSetup.value = false
+  // Re-initialize the app after setup
   initializeBackend()
-  // Set state to idle after 1 second anyway so UI shows
-  setTimeout(() => {
-    if (state.value === 'loading') {
-      state.value = 'idle'
+}
+
+function onSetupError(message: string) {
+  errorMessage.value = `Setup failed: ${message}`
+}
+
+onMounted(async () => {
+  // Check if first-run setup is needed
+  try {
+    needsSetup.value = await checkIfSetupNeeded()
+  } catch (err) {
+    console.warn('Could not check setup status, assuming ready:', err)
+    needsSetup.value = false
+  }
+  
+  // If setup is not needed, continue with normal initialization
+  if (!needsSetup.value) {
+    // Load config with fallback to defaults
+    try {
+      const config = await loadConfig()
+      isDarkMode.value = config.darkMode
+      profiles.value = config.profiles.map(p => ({
+        ...p,
+        selected_keypoints: p.selected_keypoints || p.selectedKeypoints || [],
+        enabled: p.enabled !== undefined ? p.enabled : true,
+      }))
+      
+      // Ensure at least one profile exists
+      if (profiles.value.length === 0) {
+        profiles.value = [{
+          id: 'default',
+          name: 'Standard Fish',
+          description: 'All 20 keypoints',
+          selectedKeypoints: Array.from({ length: 20 }, (_, i) => i),
+          selected_keypoints: Array.from({ length: 20 }, (_, i) => i),
+          createdAt: Date.now(),
+          enabled: true,
+          folder_path: undefined,
+        }]
+        activeProfileId.value = 'default'
+        // Save the default profile
+        await saveConfig({ ...config, profiles: profiles.value, activeProfileId: 'default' })
+      } else {
+        activeProfileId.value = config.activeProfileId
+      }
+      
+      // Initialize profile filter to first active profile
+      const activeProfiles = profiles.value.filter(p => p.enabled)
+      if (activeProfiles.length > 0) {
+        selectedProfileFilter.value = activeProfiles[0].id
+      }
+
+      // Load active profile's keypoints
+      const activeProfile = profiles.value.find(p => p.id === activeProfileId.value)
+      if (activeProfile) {
+        selectedKeypoints.value = new Set(activeProfile.selected_keypoints || activeProfile.selectedKeypoints)
+      }
+    } catch (err) {
+      console.error('Failed to load config, using defaults:', err)
+      // Fallback to default profile if config loading completely fails
+      profiles.value = [{
+        id: 'default',
+        name: 'Standard Fish',
+        description: 'All 20 keypoints',
+        selectedKeypoints: Array.from({ length: 20 }, (_, i) => i),
+        selected_keypoints: Array.from({ length: 20 }, (_, i) => i),
+        createdAt: Date.now(),
+        enabled: true,
+        folder_path: undefined,
+      }]
+      activeProfileId.value = 'default'
+      selectedProfileFilter.value = 'default'
+      selectedKeypoints.value = new Set(Array.from({ length: 20 }, (_, i) => i))
     }
-  }, 1000)
+
+    // Initialize backend immediately but don't block UI
+    initializeBackend()
+    // Set state to idle after 1 second anyway so UI shows
+    setTimeout(() => {
+      if (state.value === 'loading') {
+        state.value = 'idle'
+      }
+    }, 1000)
+  }
 })
 
 watch(() => selectedPredictionIdx.value, async () => {

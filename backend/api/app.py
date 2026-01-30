@@ -8,28 +8,48 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# --------------------------------------------------
+# Path bootstrap - must happen BEFORE other imports
+# --------------------------------------------------
+# Figure out where we are and set up imports accordingly
+_THIS_FILE = Path(__file__).resolve()
+_API_DIR = _THIS_FILE.parent  # api/
+_BACKEND_DIR = _API_DIR.parent  # backend/ (contains cavfish/, api/, etc.)
+
+# Add backend dir to path so we can import cavfish, api, etc. directly
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
+
+# Also try parent of backend for dev mode
+_ROOT = _BACKEND_DIR.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+# Try importing cavfish - this should work now
+try:
+    from cavfish.model_pack import ensure_model_pack, read_meta
+    from cavfish.manager import ModelManager
+    from cavfish.infer import infer_image
+    from cavfish.io import iter_images
+    from cavfish.draw import draw_overlay
+    from cavfish.phenotypes import compute_phenotypes
+    from cavfish.export import export_csv, export_json, export_annotated_images
+except ImportError:
+    # Fallback for dev mode with backend prefix
+    from backend.cavfish.model_pack import ensure_model_pack, read_meta
+    from backend.cavfish.manager import ModelManager
+    from backend.cavfish.infer import infer_image
+    from backend.cavfish.io import iter_images
+    from backend.cavfish.draw import draw_overlay
+    from backend.cavfish.phenotypes import compute_phenotypes
+    from backend.cavfish.export import export_csv, export_json, export_annotated_images
+
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import cv2
-
-from backend.cavfish.model_pack import ensure_model_pack, read_meta
-from backend.cavfish.manager import ModelManager
-from backend.cavfish.infer import infer_image  # array-based infer_image(model, rgb, *, cfg_path=..., device=...)
-from backend.cavfish.io import iter_images
-from backend.cavfish.draw import draw_overlay
-from backend.cavfish.phenotypes import compute_phenotypes
-from backend.cavfish.export import export_csv, export_json, export_annotated_images
-
-# --------------------------------------------------
-# Path bootstrap
-# --------------------------------------------------
-ROOT = Path(__file__).resolve().parents[2]
-BACKEND = ROOT / "backend"
-if str(BACKEND) not in sys.path:
-    sys.path.insert(0, str(BACKEND))
 
 logger = logging.getLogger("cavfish.api")
 logging.basicConfig(level=logging.INFO)
@@ -131,6 +151,8 @@ def read_image_for_model(img_path: str):
     bgr = cv2.imread(img_path, cv2.IMREAD_COLOR)
     if bgr is None:
         raise HTTPException(status_code=400, detail=f"Failed to read image via OpenCV: {img_path}")
+    
+    logger.info(f"Loaded image: {img_path}, size: {bgr.shape[1]}x{bgr.shape[0]}")
 
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
     return bgr, rgb
@@ -165,6 +187,7 @@ def enrich_prediction_with_phenotypes(pred: Dict[str, Any], meta: Dict[str, Any]
     pairs = meta.get("phenotype_pairs", [])
     scale_by_sl = meta.get("phenotype_scale_by_sl", False)
     sl_pair = meta.get("phenotype_sl_pair", None)
+    phenotype_names = meta.get("phenotype_names", [])
 
     try:
         phenotypes = compute_phenotypes(
@@ -172,6 +195,7 @@ def enrich_prediction_with_phenotypes(pred: Dict[str, Any], meta: Dict[str, Any]
             pairs=pairs,
             scale_by_sl=scale_by_sl,
             sl_pair=sl_pair,
+            phenotype_names=phenotype_names,
         )
 
         # Add phenotypes to extra_pred_fields
@@ -186,12 +210,17 @@ def enrich_prediction_with_phenotypes(pred: Dict[str, Any], meta: Dict[str, Any]
 # --------------------------------------------------
 # Endpoints
 # --------------------------------------------------
+@app.get("/")
+def root() -> Dict[str, Any]:
+    return {"ok": True, "service": "cavfish-backend", "endpoints": ["/health", "/model/info", "/infer/image", "/infer/folder"]}
+
 @app.get("/health")
 def health() -> Dict[str, Any]:
     return {"ok": True, "device": DEVICE, "model_dir": str(MODEL_DIR)}
 
 @app.get("/model/info")
 def model_info() -> Dict[str, Any]:
+    logger.info(f"Returning model info, meta keys: {list(meta.keys())}")
     return meta
 
 @app.post("/infer/image")
@@ -223,12 +252,26 @@ def infer_one(req: InferImageReq) -> Dict[str, Any]:
         tmp_dir = (MODEL_DIR / "tmp").resolve()
         tmp_dir.mkdir(parents=True, exist_ok=True)
 
-        out_path = tmp_dir / (Path(img_path).stem + "_overlay.png")
-        over = draw_overlay(bgr, pred)
-        cv2.imwrite(str(out_path), over)
+        import base64
+        h, w = bgr.shape[:2]
+        logger.info(f"Creating overlay for image size: {w}x{h}")
+        
+        # Create FULL RESOLUTION overlay (no downscaling at all)
+        over_full = draw_overlay(bgr, pred)
+        out_path_full = tmp_dir / (Path(img_path).stem + "_overlay.jpg")
+        # Save as JPEG with quality 95 for smaller file size
+        cv2.imwrite(str(out_path_full), over_full, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        logger.info(f"Saved full resolution overlay: {out_path_full}, size: {over_full.shape[1]}x{over_full.shape[0]}")
 
         if isinstance(pred, dict):
-            pred["overlay_path"] = str(out_path)
+            # Use full resolution overlay path for export
+            pred["overlay_path"] = str(out_path_full)
+            
+            # Encode full resolution as JPEG for UI (quality 95)
+            encode_params = [cv2.IMWRITE_JPEG_QUALITY, 95]
+            _, buffer = cv2.imencode('.jpg', over_full, encode_params)
+            pred["overlay_png_base64"] = base64.b64encode(buffer).decode('utf-8')
+            logger.info(f"Encoded full resolution overlay - size: {over_full.shape[1]}x{over_full.shape[0]}, JPEG size: {len(buffer)/1024:.1f}KB")
 
     return pred
 
@@ -268,10 +311,24 @@ def infer_folder(req: InferFolderReq) -> Dict[str, Any]:
         pred = enrich_prediction_with_phenotypes(pred, meta)
 
         if req.return_overlay_png and isinstance(pred, dict) and tmp_dir is not None:
-            out_path = tmp_dir / (Path(p).stem + "_overlay.png")
-            over = draw_overlay(bgr, pred)
-            cv2.imwrite(str(out_path), over)
-            pred["overlay_path"] = str(out_path)
+            import base64
+            h, w = bgr.shape[:2]
+            
+            # Create FULL RESOLUTION overlay (no downscaling at all)
+            over_full = draw_overlay(bgr, pred)
+            out_path_full = tmp_dir / (Path(p).stem + "_overlay.jpg")
+            # Save as JPEG with quality 95 for smaller file size
+            cv2.imwrite(str(out_path_full), over_full, [cv2.IMWRITE_JPEG_QUALITY, 95])
+            
+            # Use full resolution overlay path for export
+            pred["overlay_path"] = str(out_path_full)
+            
+            # Encode full resolution as JPEG for UI
+            encode_params = [cv2.IMWRITE_JPEG_QUALITY, 95]
+            _, buffer = cv2.imencode('.jpg', over_full, encode_params)
+            pred["overlay_png_base64"] = base64.b64encode(buffer).decode('utf-8')
+            if i == 0:  # Log first image only
+                logger.info(f"Batch: Full resolution overlay - size: {over_full.shape[1]}x{over_full.shape[0]}, JPEG size: {len(buffer)/1024:.1f}KB")
 
         preds.append(pred)
 

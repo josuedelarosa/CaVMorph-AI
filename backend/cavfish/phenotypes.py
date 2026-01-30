@@ -14,6 +14,7 @@ def compute_phenotypes(
     pairs: Sequence[Sequence[int]],
     scale_by_sl: bool,
     sl_pair: Optional[Sequence[int]],
+    phenotype_names: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Returns a list of phenotype measurements derived from keypoint pairs.
@@ -37,10 +38,17 @@ def compute_phenotypes(
         i, j = int(p[0]), int(p[1])
         dpx = _dist(keypoints_xy[i], keypoints_xy[j])
         dnorm = (dpx / sl_value) if (sl_value is not None) else None
+        
+        # Use custom name if provided, otherwise fallback to pair_i_j
+        if phenotype_names and idx < len(phenotype_names):
+            name = phenotype_names[idx]
+        else:
+            name = f"pair_{i}_{j}"
+        
         phenos.append({
             "id": idx,
             "pair": [i, j],
-            "name": f"pair_{i}_{j}",
+            "name": name,
             "value_px": dpx,
             "value_norm": dnorm,
         })

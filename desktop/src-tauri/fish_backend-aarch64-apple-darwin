@@ -1,0 +1,21 @@
+#!/bin/bash
+# MacOS/Linux Sidecar Wrapper
+
+# Get the directory where this script resides (inside app bundle MacOS folder)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Define where resources are relative to MacOS folder in the bundle
+# macOS: App.app/Contents/MacOS/script -> App.app/Contents/Resources
+# Linux: AppDir/usr/bin/script -> AppDir/usr/lib/... (Tauri standard layout varies)
+# But for single-file bundle on macOS, it's always ../Resources
+
+RESOURCES_DIR="$SCRIPT_DIR/../Resources"
+
+# The path to the actual python executable inside the bundled directory
+TARGET_BIN="$RESOURCES_DIR/python_backend/fish_backend"
+
+# Ensure executable permissions (sometimes lost in copying)
+chmod +x "$TARGET_BIN"
+
+# Execute
+exec "$TARGET_BIN" "$@"

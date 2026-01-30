@@ -94,6 +94,12 @@ def draw_overlay(
             kpt_thr = 0.0
             
     h, w = out.shape[:2]
+    
+    # Scale keypoint radius based on image dimensions for consistent visual size
+    # Use 0.7% of the smaller dimension as the radius (increased by 75%)
+    base_dim = min(h, w)
+    dynamic_radius = max(3, int(base_dim * 0.007))  # Min 3px, scales with image size
+    
     for (x, y, s, label) in pts:
         if s < kpt_thr:
             continue
@@ -105,15 +111,37 @@ def draw_overlay(
         if xi < -w or xi > 2 * w or yi < -h or yi > 2 * h:
             continue
 
-        cv2.circle(out, (xi, yi), radius, (0, 0, 255), thickness)
+        # Simple red color for all keypoints (BGR format)
+        color = (0, 0, 255)  # BGR: pure red
+        
+        # Draw main keypoint circle (no outline, no shadow)
+        cv2.circle(out, (xi, yi), dynamic_radius, color, thickness, cv2.LINE_AA)
+        
+        # Scale font size with image dimensions for consistent visual size
+        font_scale = max(0.5, base_dim * 0.001)  # Scales with image size, min 0.5
+        font_thickness = max(2, int(base_dim * 0.003))  # Scales with image size, min 2
+        label_offset_y = int(dynamic_radius * 2.5)
+        
+        # Black outline for label
         cv2.putText(
             out,
             label,
-            (xi + 5, yi + 5),
+            (xi - 5, yi - label_offset_y),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
+            font_scale,
+            (0, 0, 0),
+            font_thickness + 1,
+            cv2.LINE_AA,
+        )
+        # White text
+        cv2.putText(
+            out,
+            label,
+            (xi - 5, yi - label_offset_y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            font_scale,
             (255, 255, 255),
-            1,
+            font_thickness,
             cv2.LINE_AA,
         )
 

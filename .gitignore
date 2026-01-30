@@ -40,6 +40,9 @@ miniforge3/
 *.h5
 *.npz
 *.npy
+*.pkl
+*.pickle
+*.safetensors
 
 logs/
 wandb/
@@ -49,6 +52,10 @@ outputs/
 predictions/
 results/
 checkpoints/
+weights/
+models/*.pth
+models/**/*.pth
+models/**/*.pt
 
 # =========================
 # Datasets & media
@@ -58,9 +65,17 @@ datasets/
 images/
 videos/
 *.jpg
+*.jpeg
 *.png
+*.gif
+*.bmp
+*.tiff
+*.tif
 *.mp4
 *.avi
+*.mov
+*.mkv
+*.webm
 
 # =========================
 # Config & secrets
@@ -92,6 +107,38 @@ ehthumbs.db
 desktop/dist/
 desktop/build/
 desktop/.cache/
+desktop/node_modules/
+desktop/package-lock.json
+desktop/src-tauri/target/
+desktop/src-tauri/Cargo.lock
+*.dmg
+*.app
+*.exe
+*.msi
+*.deb
+*.rpm
+*.AppImage
+build/
+dist/
+
+# =========================
+# Node.js
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+.pnp.*
+.yarn/*
+
+# =========================
+# Rust
+# =========================
+target/
+Cargo.lock
+**/*.rs.bk
 
 # =========================
 # FastAPI / Uvicorn
@@ -104,4 +151,36 @@ uvicorn.log
 # =========================
 tmp/
 .cache/
+*.tmp
+*.temp
+*.bak
+*.backup
+*.swp
+*.swo
 
+# =========================
+# Application Data & Caches
+# =========================
+.MorphologIA/
+.FishMorph/
+*.db
+*.sqlite
+*.sqlite3
+
+# =========================
+# Large archives & compressed files
+# =========================
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+*.bz2
+*.xz
+
+# =========================
+# CSV/JSON exports (optional - uncomment if needed)
+# =========================
+# *.csv
+# *.json

@@ -142,9 +142,11 @@ def export_annotated_images(
         image_path = pred.get("image_path", "")
         if image_path:
             stem = Path(image_path).stem
-            out_name = f"{stem}{suffix}.png"
+            out_name = f"{stem}{suffix}.jpg"
         else:
-            out_name = overlay_file.name
+            # Change extension to .jpg
+            out_name = overlay_file.stem + suffix + ".jpg"
 
         out_file = output_path / out_name
-        cv2.imwrite(str(out_file), cv2.imread(str(overlay_file)))
+        # Save as JPEG with quality 95 for smaller file size
+        cv2.imwrite(str(out_file), cv2.imread(str(overlay_file)), [cv2.IMWRITE_JPEG_QUALITY, 95])
