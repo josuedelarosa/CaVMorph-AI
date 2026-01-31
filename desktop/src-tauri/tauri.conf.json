@@ -6,7 +6,7 @@
     "distDir": "../dist"
   },
   "package": {
-    "productName": "MorphologIA",
+    "productName": "Pheno.AI",
     "version": "0.1.0"
   },
   "tauri": {
@@ -68,7 +68,7 @@
     },
     "windows": [
       {
-        "title": "MorphologIA",
+        "title": "Pheno.AI",
         "width": 1400,
         "height": 900,
         "minWidth": 800,

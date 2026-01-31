@@ -51,13 +51,13 @@ fn get_app_data_dir() -> PathBuf {
         // Use hidden folder to avoid spaces in path (Miniforge installer issue)
         dirs::home_dir()
             .unwrap_or_default()
-            .join(".MorphologIA")
+            .join(".phenoai")
     }
     #[cfg(target_os = "windows")]
     {
         dirs::config_dir()
             .unwrap_or_default()
-            .join("MorphologIA")
+            .join("Pheno.AI")
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
@@ -65,7 +65,7 @@ fn get_app_data_dir() -> PathBuf {
             .unwrap_or_default()
             .join(".local")
             .join("share")
-            .join("MorphologIA")
+            .join("phenoai")
     }
 }
 
@@ -480,7 +480,7 @@ fn spawn_backend(port: u16) -> Result<(Child, String), String> {
     
     // Create cache directories outside .app bundle to prevent AMFI violations
     let home_dir = dirs::home_dir().ok_or("Cannot determine home directory")?;
-    let cache_base = home_dir.join("Library/Caches/MorphologIA");
+    let cache_base = home_dir.join("Library/Caches/Pheno.AI");
     let pycache_dir = cache_base.join("pycache");
     let torch_cache = cache_base.join("torch");
     let mpl_cache = cache_base.join("matplotlib");

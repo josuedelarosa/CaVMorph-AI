@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MorphologIA - First Run Setup Script
+Pheno.AI - First Run Setup Script
 This script is executed by the Tauri app on first launch to set up the environment.
 
 It handles:
@@ -70,11 +70,11 @@ def get_app_data_dir() -> Path:
     """Get the application data directory."""
     if platform.system() == "Darwin":
         # Use hidden folder to avoid spaces in path (Miniforge installer issue)
-        return Path.home() / ".MorphologIA"
+        return Path.home() / ".phenoai"
     elif platform.system() == "Windows":
-        return Path(os.environ.get("APPDATA", "")) / "MorphologIA"
+        return Path(os.environ.get("APPDATA", "")) / "Pheno.AI"
     else:
-        return Path.home() / ".local" / "share" / "MorphologIA"
+        return Path.home() / ".local" / "share" / "phenoai"
 
 
 def get_app_conda_dir() -> Path:
@@ -909,7 +909,7 @@ def main():
     """Main setup function."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="MorphologIA Setup")
+    parser = argparse.ArgumentParser(description="Pheno.AI Setup")
     parser.add_argument("--backend-dir", type=str, help="Path to backend source")
     parser.add_argument("--bundled-model", type=str, help="Path to bundled model weights")
     args = parser.parse_args()

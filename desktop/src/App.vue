@@ -16,7 +16,7 @@
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z" fill="currentColor"/>
             <circle cx="12" cy="12" r="3" fill="currentColor"/>
           </svg>
-          <h1>MorphologIA</h1>
+          <h1>Pheno.AI</h1>
         </div>
         <div class="header-actions">
           <button class="icon-btn" @click="showDebugConsole = !showDebugConsole" title="Toggle Debug Console">
@@ -282,7 +282,7 @@
 
     <!-- Footer -->
     <footer class="app-footer">
-      <p>MorphologIA v0.1.0 | Backend: <span :class="backendStatus">{{ backendStatusText }}</span></p>
+      <p>Pheno.AI v0.1.0 | Backend: <span :class="backendStatus">{{ backendStatusText }}</span></p>
     </footer>
 
     <!-- Settings Modal -->
@@ -294,6 +294,12 @@
       @close="showSettings = false"
       @save="handleSettingsSave"
       @delete="handleDeleteProfile"
+    />
+    
+    <!-- Welcome Guide -->
+    <WelcomeGuide
+      :show="showWelcome"
+      @close="showWelcome = false"
     />
   </div>
 </template>
@@ -314,6 +320,7 @@ import {
 } from './utils/api'
 import SettingsModal from './components/SettingsModal.vue'
 import SetupView from './views/SetupView.vue'
+import WelcomeGuide from './components/WelcomeGuide.vue'
 import {
   loadConfig,
   saveConfig,
@@ -349,6 +356,7 @@ const profiles = ref<Profile[]>([])
 const activeProfileId = ref('default')
 const selectedKeypoints = ref<Set<number>>(new Set())
 const selectedProfileFilter = ref('')
+const showWelcome = ref(false)
 
 // Intercept console.log/error/warn for debug panel
 const originalLog = console.log
@@ -733,7 +741,7 @@ async function exportResults(format: 'csv' | 'json' | 'images') {
       } else {
         const filename = `${profile.name}_results_${timestamp}`
         const documentsDir = await homeDir()
-        const exportDir = `${documentsDir}/Documents/MorphologIA`
+        const exportDir = `${documentsDir}/Documents/Pheno.AI`
         // Create directory if it doesn't exist (handled by backend)
         outputPath = `${exportDir}/${filename}.${format}`
       }
@@ -1168,6 +1176,12 @@ onMounted(async () => {
   
   // If setup is not needed, continue with normal initialization
   if (!needsSetup.value) {
+    // Check if welcome guide should be shown (first time user)
+    const welcomeShown = localStorage.getItem('phenoai-welcome-shown')
+    if (!welcomeShown) {
+      showWelcome.value = true
+    }
+    
     // Load config with fallback to defaults
     try {
       const config = await loadConfig()
