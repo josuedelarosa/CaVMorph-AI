@@ -3,7 +3,7 @@
     <div class="setup-card">
       <div class="header">
         <div class="logo-icon">🐟</div>
-        <h1>Pheno.AI</h1>
+        <h1>PhenoAI</h1>
         <p class="subtitle">First-time Setup</p>
       </div>
 
@@ -11,7 +11,7 @@
       <div v-if="showXcodeToolsDialog" class="xcode-dialog">
         <div class="dialog-icon">⚠️</div>
         <h2>Command Line Developer Tools Required</h2>
-        <p>Pheno.AI requires macOS Command Line Developer Tools to run conda and compile packages.</p>
+        <p>PhenoAI requires macOS Command Line Developer Tools to run conda and compile packages.</p>
         <div class="dialog-steps">
           <div class="step-item">
             <span class="step-num">1</span>
@@ -307,7 +307,7 @@ const startSetup = async () => {
     })
 
     // Start the setup process
-    addLog('Starting Pheno.AI setup...', 'info')
+    addLog('Starting PhenoAI setup...', 'info')
     await invoke('run_first_time_setup')
   } catch (error) {
     setupError.value = true

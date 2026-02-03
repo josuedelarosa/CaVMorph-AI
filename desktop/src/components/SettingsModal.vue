@@ -163,7 +163,7 @@ const close = () => emit('close')
 // Initialize selected keypoints when profile changes
 const updateSelectedKeypoints = () => {
   if (currentProfile.value) {
-    selectedKeypoints.value = new Set(currentProfile.value.selectedKeypoints)
+    selectedKeypoints.value = new Set(currentProfile.value.selected_keypoints || currentProfile.value.selectedKeypoints || [])
   }
 }
 
@@ -171,6 +171,19 @@ const updateSelectedKeypoints = () => {
 import { watch } from 'vue'
 watch(() => props.activeProfileId, () => {
   selectedProfileId.value = props.activeProfileId
+  updateSelectedKeypoints()
+})
+
+// Watch when modal opens to reload keypoints
+watch(() => props.isOpen, (isOpen) => {
+  if (isOpen) {
+    selectedProfileId.value = props.activeProfileId
+    updateSelectedKeypoints()
+  }
+})
+
+// Watch for profile selection changes in the dropdown
+watch(selectedProfileId, () => {
   updateSelectedKeypoints()
 })
 

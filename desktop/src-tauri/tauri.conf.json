@@ -6,7 +6,7 @@
     "distDir": "../dist"
   },
   "package": {
-    "productName": "Pheno.AI",
+    "productName": "PhenoAI",
     "version": "0.1.0"
   },
   "tauri": {
@@ -64,11 +64,11 @@
       ]
     },
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;"
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: https://asset.localhost;"
     },
     "windows": [
       {
-        "title": "Pheno.AI",
+        "title": "PhenoAI",
         "width": 1400,
         "height": 900,
         "minWidth": 800,

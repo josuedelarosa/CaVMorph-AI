@@ -4,7 +4,7 @@
 
 set -e
 
-APP_PATH="src-tauri/target/release/bundle/macos/Fish Morphometrics.app"
+APP_PATH="src-tauri/target/release/bundle/macos/PhenoAI.app"
 
 if [ ! -d "$APP_PATH" ]; then
     echo "⚠️  App bundle not found at: $APP_PATH"

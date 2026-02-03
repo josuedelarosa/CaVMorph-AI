@@ -57,7 +57,7 @@ fn get_app_data_dir() -> PathBuf {
     {
         dirs::config_dir()
             .unwrap_or_default()
-            .join("Pheno.AI")
+            .join("PhenoAI")
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
@@ -480,7 +480,7 @@ fn spawn_backend(port: u16) -> Result<(Child, String), String> {
     
     // Create cache directories outside .app bundle to prevent AMFI violations
     let home_dir = dirs::home_dir().ok_or("Cannot determine home directory")?;
-    let cache_base = home_dir.join("Library/Caches/Pheno.AI");
+    let cache_base = home_dir.join("Library/Caches/PhenoAI");
     let pycache_dir = cache_base.join("pycache");
     let torch_cache = cache_base.join("torch");
     let mpl_cache = cache_base.join("matplotlib");

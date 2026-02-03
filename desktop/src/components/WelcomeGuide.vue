@@ -5,7 +5,7 @@
       
       <div class="welcome-header">
         <div class="logo">🐟</div>
-        <h1>Welcome to Pheno.AI</h1>
+        <h1>Welcome to PhenoAI</h1>
         <p class="subtitle">AI-powered phenotype analysis for fish morphometrics</p>
       </div>
 
@@ -13,7 +13,7 @@
         <div class="guide-section">
           <div class="section-icon">📂</div>
           <h2>Supported Formats</h2>
-          <p>Pheno.AI accepts the following image formats:</p>
+          <p>PhenoAI accepts the following image formats:</p>
           <ul>
             <li><strong>JPEG</strong> (.jpg, .jpeg) - Recommended</li>
             <li><strong>PNG</strong> (.png) - Lossless quality</li>
@@ -64,7 +64,7 @@
           <h2>Export & Results</h2>
           <p>Analyzed images are automatically saved to:</p>
           <div class="path-box">
-            <code>~/Documents/Pheno.AI/</code>
+            <code>~/Documents/PhenoAI/</code>
           </div>
           <p>Each export includes:</p>
           <ul>

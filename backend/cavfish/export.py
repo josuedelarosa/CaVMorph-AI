@@ -20,23 +20,47 @@ def export_csv(
     - image_path
     - keypoint_1_x, keypoint_1_y, keypoint_1_conf, ...
     - phenotype_pair_0_1_px, phenotype_pair_0_1_norm, ...
+    
+    NOTE: This function now respects the filtered keypoints in predictions.
+    If predictions have been filtered, only those keypoints will be exported.
     """
     Path(path).parent.mkdir(parents=True, exist_ok=True)
 
-    keypoint_names = meta.get("keypoint_names", [f"kp{i+1}" for i in range(20)])
-    phenotype_pairs = meta.get("phenotype_pairs", [])
+    if len(predictions) == 0:
+        return
+
+    # Get the number of keypoints from the first prediction (after filtering)
+    first_pred = predictions[0]
+    kpts = first_pred.get("keypoints", [])
+    
+    # Check if keypoints are in dict format
+    if isinstance(kpts, list) and len(kpts) > 0 and isinstance(kpts[0], dict):
+        # Dict format - use names from dicts
+        keypoint_names = [kpt.get("name", f"kp{i+1}") for i, kpt in enumerate(kpts)]
+    else:
+        # Array format - flatten if nested
+        if isinstance(kpts, list) and len(kpts) > 0:
+            if isinstance(kpts[0], list) and len(kpts[0]) > 0:
+                if isinstance(kpts[0][0], list) and len(kpts[0][0]) == 2:
+                    kpts = kpts[0] if len(kpts) == 1 else kpts
+        
+        num_keypoints = len(kpts)
+        # Use generic keypoint names based on actual count
+        keypoint_names = [f"kp{i+1}" for i in range(num_keypoints)]
+    
+    # Get phenotypes from first prediction (they're already filtered)
+    phenotypes_data = first_pred.get("extra_pred_fields", {}).get("phenotypes", [])
 
     fieldnames = ["image_path"]
 
-    # Add keypoint columns
+    # Add keypoint columns (only for keypoints that exist)
     for i, name in enumerate(keypoint_names):
         fieldnames.extend([f"{name}_x", f"{name}_y", f"{name}_conf"])
 
-    # Add phenotype columns
-    for i, pair in enumerate(phenotype_pairs):
-        i_kp, j_kp = pair
-        pair_name = f"pair_{i_kp}_{j_kp}"
-        fieldnames.extend([f"{pair_name}_px", f"{pair_name}_norm"])
+    # Add phenotype columns (only for phenotypes that exist in filtered data)
+    for pheno in phenotypes_data:
+        pheno_name = pheno.get("name", f"pheno_{pheno.get('id', 0)}")
+        fieldnames.extend([f"{pheno_name}_px", f"{pheno_name}_norm"])
 
     with open(path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -45,68 +69,79 @@ def export_csv(
         for pred in predictions:
             row = {"image_path": pred.get("image_path", "")}
 
-            # Extract keypoints - handle nested arrays
+            # Extract keypoints - handle multiple formats
             kpts = pred.get("keypoints", [])
             scores = pred.get("keypoint_scores", [])
             
-            # Flatten if nested: [[[x,y],...]] -> [[x,y],...]
-            if isinstance(kpts, list) and len(kpts) > 0:
-                if isinstance(kpts[0], list) and len(kpts[0]) > 0:
-                    # Check if it's [[x,y], ...] (correct) or [[[x,y], ...]] (nested)
-                    if isinstance(kpts[0][0], list) and len(kpts[0][0]) == 2:
-                        # It's [[[x,y], ...]], flatten to [[x,y], ...]
-                        kpts = kpts[0] if len(kpts) == 1 else kpts
-            
-            # Flatten scores similarly
-            if isinstance(scores, list) and len(scores) > 0:
-                if isinstance(scores[0], list):
-                    # It's [[score1, score2, ...]], flatten to [score1, score2, ...]
-                    scores = scores[0] if len(scores) == 1 else scores
+            # Check if keypoints are in dict format: [{"x":..., "y":..., "score":..., "name":...}, ...]
+            if isinstance(kpts, list) and len(kpts) > 0 and isinstance(kpts[0], dict):
+                # Dict format - extract directly
+                for i, name in enumerate(keypoint_names):
+                    if i < len(kpts):
+                        kpt = kpts[i]
+                        row[f"{name}_x"] = kpt.get("x", "")
+                        row[f"{name}_y"] = kpt.get("y", "")
+                        row[f"{name}_conf"] = kpt.get("score", "")
+                    else:
+                        row[f"{name}_x"] = ""
+                        row[f"{name}_y"] = ""
+                        row[f"{name}_conf"] = ""
+            else:
+                # Array format - legacy handling
+                # Flatten if nested: [[[x,y],...]] -> [[x,y],...]
+                if isinstance(kpts, list) and len(kpts) > 0:
+                    if isinstance(kpts[0], list) and len(kpts[0]) > 0:
+                        # Check if it's [[x,y], ...] (correct) or [[[x,y], ...]] (nested)
+                        if isinstance(kpts[0][0], list) and len(kpts[0][0]) == 2:
+                            # It's [[[x,y], ...]], flatten to [[x,y], ...]
+                            kpts = kpts[0] if len(kpts) == 1 else kpts
+                
+                # Flatten scores similarly
+                if isinstance(scores, list) and len(scores) > 0:
+                    if isinstance(scores[0], list):
+                        # It's [[score1, score2, ...]], flatten to [score1, score2, ...]
+                        scores = scores[0] if len(scores) == 1 else scores
 
-            for i, name in enumerate(keypoint_names):
-                x_val = ""
-                y_val = ""
-                conf_val = ""
-                
-                # Extract x, y from keypoint
-                if i < len(kpts):
-                    kpt = kpts[i]
-                    # Handle both [x, y] and [[x, y]] formats
-                    if isinstance(kpt, (list, tuple)):
-                        if len(kpt) >= 2:
-                            # Could be [x, y] or [[x, y]]
-                            if isinstance(kpt[0], (list, tuple)):
-                                # It's [[x, y]]
-                                x_val = float(kpt[0][0]) if len(kpt[0]) > 0 else ""
-                                y_val = float(kpt[0][1]) if len(kpt[0]) > 1 else ""
-                            else:
-                                # It's [x, y]
-                                x_val = float(kpt[0])
-                                y_val = float(kpt[1])
-                
-                # Extract confidence
-                if i < len(scores):
-                    score = scores[i]
-                    if isinstance(score, (int, float)):
-                        conf_val = float(score)
-                
-                row[f"{name}_x"] = x_val
-                row[f"{name}_y"] = y_val
-                row[f"{name}_conf"] = conf_val
+                for i, name in enumerate(keypoint_names):
+                    x_val = ""
+                    y_val = ""
+                    conf_val = ""
+                    
+                    # Extract x, y from keypoint
+                    if i < len(kpts):
+                        kpt = kpts[i]
+                        # Handle both [x, y] and [[x, y]] formats
+                        if isinstance(kpt, (list, tuple)):
+                            if len(kpt) >= 2:
+                                # Could be [x, y] or [[x, y]]
+                                if isinstance(kpt[0], (list, tuple)):
+                                    # It's [[x, y]]
+                                    x_val = float(kpt[0][0]) if len(kpt[0]) > 0 else ""
+                                    y_val = float(kpt[0][1]) if len(kpt[0]) > 1 else ""
+                                else:
+                                    # It's [x, y]
+                                    x_val = float(kpt[0])
+                                    y_val = float(kpt[1])
+                    
+                    # Extract confidence
+                    if i < len(scores):
+                        score = scores[i]
+                        if isinstance(score, (int, float)):
+                            conf_val = float(score)
+                    
+                    row[f"{name}_x"] = x_val
+                    row[f"{name}_y"] = y_val
+                    row[f"{name}_conf"] = conf_val
 
-            # Extract phenotypes (if available in pred)
+            # Extract phenotypes from this prediction (already filtered)
             extra_fields = pred.get("extra_pred_fields", {})
-            phenotypes_data = extra_fields.get("phenotypes", [])
+            pred_phenotypes = extra_fields.get("phenotypes", [])
 
-            for idx, pair in enumerate(phenotype_pairs):
-                pair_name = f"pair_{pair[0]}_{pair[1]}"
-                if idx < len(phenotypes_data):
-                    pheno = phenotypes_data[idx]
-                    row[f"{pair_name}_px"] = pheno.get("value_px", "")
-                    row[f"{pair_name}_norm"] = pheno.get("value_norm", "")
-                else:
-                    row[f"{pair_name}_px"] = ""
-                    row[f"{pair_name}_norm"] = ""
+            # Add phenotype values by name
+            for pheno in pred_phenotypes:
+                pheno_name = pheno.get("name", f"pheno_{pheno.get('id', 0)}")
+                row[f"{pheno_name}_px"] = pheno.get("value_px", "")
+                row[f"{pheno_name}_norm"] = pheno.get("value_norm", "")
 
             writer.writerow(row)
 
@@ -124,29 +159,37 @@ def export_annotated_images(
     suffix: str = "_annotated",
 ) -> None:
     """
-    Export annotated images (with keypoints drawn).
-    Reads overlay_path from each prediction and copies/links them.
+    Export annotated images with keypoints drawn.
+    Regenerates overlays with only the keypoints present in filtered predictions.
     """
+    from cavfish.draw import draw_overlay
+    
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
     for pred in predictions:
-        overlay_path = pred.get("overlay_path")
-        if overlay_path is None:
-            continue
-
-        overlay_file = Path(overlay_path)
-        if not overlay_file.exists():
-            continue
-
         image_path = pred.get("image_path", "")
-        if image_path:
-            stem = Path(image_path).stem
-            out_name = f"{stem}{suffix}.jpg"
-        else:
-            # Change extension to .jpg
-            out_name = overlay_file.stem + suffix + ".jpg"
+        if not image_path:
+            continue
+        
+        image_file = Path(image_path)
+        if not image_file.exists():
+            continue
 
+        # Read the original image
+        bgr = cv2.imread(str(image_file))
+        if bgr is None:
+            continue
+        
+        # Draw overlay with FILTERED keypoints (those in pred)
+        # Since pred has been filtered by frontend, it only contains selected keypoints
+        overlay_img = draw_overlay(bgr, pred)
+        
+        # Generate output filename
+        stem = image_file.stem
+        out_name = f"{stem}{suffix}.jpg"
         out_file = output_path / out_name
-        # Save as JPEG with quality 95 for smaller file size
-        cv2.imwrite(str(out_file), cv2.imread(str(overlay_file)), [cv2.IMWRITE_JPEG_QUALITY, 95])
+        
+        # Save as JPEG with quality 95
+        cv2.imwrite(str(out_file), overlay_img, [cv2.IMWRITE_JPEG_QUALITY, 95])
+

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pheno.AI - First Run Setup Script
+PhenoAI - First Run Setup Script
 This script is executed by the Tauri app on first launch to set up the environment.
 
 It handles:
@@ -72,7 +72,7 @@ def get_app_data_dir() -> Path:
         # Use hidden folder to avoid spaces in path (Miniforge installer issue)
         return Path.home() / ".phenoai"
     elif platform.system() == "Windows":
-        return Path(os.environ.get("APPDATA", "")) / "Pheno.AI"
+        return Path(os.environ.get("APPDATA", "")) / "PhenoAI"
     else:
         return Path.home() / ".local" / "share" / "phenoai"
 
@@ -909,7 +909,7 @@ def main():
     """Main setup function."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Pheno.AI Setup")
+    parser = argparse.ArgumentParser(description="PhenoAI Setup")
     parser.add_argument("--backend-dir", type=str, help="Path to backend source")
     parser.add_argument("--bundled-model", type=str, help="Path to bundled model weights")
     args = parser.parse_args()
