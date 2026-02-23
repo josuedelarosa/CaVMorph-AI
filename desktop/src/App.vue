@@ -583,10 +583,7 @@ function selectPrediction(idx: number) {
 
 function selectPredictionFromFiltered(idx: number, pred: PredictionResult) {
   selectedPredictionIdx.value = idx
-  // Auto-sync the profile filter to this prediction's profile
-  if (pred.profile_id) {
-    selectedProfileFilter.value = pred.profile_id
-  }
+  // Keep current profile filter selection (don't auto-switch)
   drawPreview()
 }
 
@@ -703,10 +700,8 @@ async function startAnalysis() {
     totalCount.value = totalProcessed
     currentProcessingFile.value = ''
 
-    // Initialize profile filter to first active profile if not set
-    if (selectedProfileFilter.value === '' && activeProfiles.value.length > 0) {
-      selectedProfileFilter.value = activeProfiles.value[0].id
-    }
+    // Keep profile filter as ALL PROFILES (empty string) by default
+    // User can manually select a specific profile if needed
 
     state.value = 'complete'
     infoMessage.value = `Analysis complete! Processed ${totalProcessed} images.`
@@ -1198,10 +1193,92 @@ async function checkIfSetupNeeded(): Promise<boolean> {
   }
 }
 
-function onSetupComplete() {
+async function onSetupComplete() {
   needsSetup.value = false
+  
+  // Show welcome guide for first-time users
+  const welcomeShown = localStorage.getItem('phenoai-welcome-shown')
+  if (!welcomeShown) {
+    showWelcome.value = true
+  }
+  
+  // Load config with fallback to defaults
+  try {
+    const config = await loadConfig()
+    console.log('[Init] Loaded config after setup:', config)
+    isDarkMode.value = config.darkMode
+    profiles.value = config.profiles.map(p => {
+      // Ensure we have valid selected keypoints - check both fields and ensure not empty
+      let selected = p.selected_keypoints && p.selected_keypoints.length > 0 
+        ? p.selected_keypoints 
+        : (p.selectedKeypoints && p.selectedKeypoints.length > 0 
+          ? p.selectedKeypoints 
+          : Array.from({ length: 20 }, (_, i) => i))
+      
+      return {
+        ...p,
+        selectedKeypoints: selected,
+        selected_keypoints: selected,
+        enabled: p.enabled !== undefined ? p.enabled : true,
+      }
+    })
+    
+    console.log('[Init] Profiles after mapping:', profiles.value)
+    
+    // Ensure at least one profile exists
+    if (profiles.value.length === 0) {
+      profiles.value = [{
+        id: 'default',
+        name: 'Standard Fish',
+        description: 'All 20 keypoints',
+        selectedKeypoints: Array.from({ length: 20 }, (_, i) => i),
+        selected_keypoints: Array.from({ length: 20 }, (_, i) => i),
+        createdAt: Date.now(),
+        enabled: true,
+        folder_path: undefined,
+      }]
+      activeProfileId.value = 'default'
+      // Save the default profile
+      await saveConfig({ ...config, profiles: profiles.value, activeProfileId: 'default' })
+    } else {
+      activeProfileId.value = config.activeProfileId
+    }
+    
+    // Keep profile filter as ALL PROFILES (empty string) by default
+    // This shows all images from all profiles
+
+    // Load active profile's keypoints
+    const activeProfile = profiles.value.find(p => p.id === activeProfileId.value)
+    if (activeProfile) {
+      selectedKeypoints.value = new Set(activeProfile.selected_keypoints || activeProfile.selectedKeypoints)
+    }
+  } catch (err) {
+    console.error('Failed to load config after setup, using defaults:', err)
+    // Fallback to default profile if config loading completely fails
+    profiles.value = [{
+      id: 'default',
+      name: 'Standard Fish',
+      description: 'All 20 keypoints',
+      selectedKeypoints: Array.from({ length: 20 }, (_, i) => i),
+      selected_keypoints: Array.from({ length: 20 }, (_, i) => i),
+      createdAt: Date.now(),
+      enabled: true,
+      folder_path: undefined,
+    }]
+    activeProfileId.value = 'default'
+    selectedProfileFilter.value = 'default'
+    selectedKeypoints.value = new Set(Array.from({ length: 20 }, (_, i) => i))
+  }
+  
   // Re-initialize the app after setup
   initializeBackend()
+  
+  // Set state to idle so UI shows
+  setTimeout(() => {
+    if (state.value === 'loading') {
+      state.value = 'idle'
+    }
+  }, 1000)
 }
 
 function onSetupError(message: string) {
@@ -1269,11 +1346,8 @@ onMounted(async () => {
         activeProfileId.value = config.activeProfileId
       }
       
-      // Initialize profile filter to first active profile
-      const activeProfiles = profiles.value.filter(p => p.enabled)
-      if (activeProfiles.length > 0) {
-        selectedProfileFilter.value = activeProfiles[0].id
-      }
+      // Keep profile filter as ALL PROFILES (empty string) by default
+      // This shows all images from all profiles
 
       // Load active profile's keypoints
       const activeProfile = profiles.value.find(p => p.id === activeProfileId.value)

@@ -574,9 +574,9 @@ def step_install_pytorch(conda_path: Path):
     progress.report(2, f"✓ CaVFish cloned to {cavfish_dir}", "success")
     
     # Step 12: cd CaVFish (handled via cwd parameter below)
-    # Step 13: git checkout f050defcddcaed1699c1fcaf2711e59da5ab25a7
+    # Step 13: git checkout main (stay on latest default branch for testing)
     progress.report(2, "Checking out specific commit...", "info")
-    success, output = run_command(["git", "checkout", "f050defcddcaed1699c1fcaf2711e59da5ab25a7"], cwd=str(cavfish_dir), timeout=60)
+    success, output = run_command(["git", "checkout", "main"], cwd=str(cavfish_dir), timeout=60)
     if not success:
         progress.report(2, f"Failed to checkout commit: {output}", "error")
         return False
