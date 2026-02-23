@@ -40,6 +40,8 @@ export interface ModelInfo {
   keypoint_names: string[]
   codec_input_size: [number, number]
   phenotype_pairs: [number, number][]
+  phenotype_names?: string[]
+  phenotype_types?: string[]
   phenotype_scale_by_sl: boolean
   phenotype_sl_pair: [number, number] | null
 }

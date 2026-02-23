@@ -57,6 +57,21 @@
     "DL",
     "AL"
   ],
+  "phenotype_types": [
+    "x",
+    "y",
+    "y",
+    "y",
+    "y",
+    "y",
+    "y",
+    "xy",
+    "xy",
+    "y",
+    "x",
+    "xy",
+    "xy"
+  ],
   "phenotype_degree_normalize": true,
   "phenotype_scale_by_sl": true,
   "phenotype_sl_pair": [

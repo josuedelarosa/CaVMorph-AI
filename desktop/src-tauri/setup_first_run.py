@@ -562,10 +562,14 @@ def step_install_pytorch(conda_path: Path):
         import shutil
         shutil.rmtree(cavfish_dir)
     
-    success, output = run_command(["git", "clone", "https://github.com/josuedelarosa/CaVFish.git", str(cavfish_dir)], timeout=300)
+    # Try SSH first (works if user has SSH keys), fallback to HTTPS
+    success, output = run_command(["git", "clone", "git@github.com:josuedelarosa/CaVFish.git", str(cavfish_dir)], timeout=300)
     if not success:
-        progress.report(2, f"Failed to clone CaVFish: {output}", "error")
-        return False
+        progress.report(2, "SSH clone failed, trying HTTPS...", "info")
+        success, output = run_command(["git", "clone", "https://github.com/josuedelarosa/CaVFish.git", str(cavfish_dir)], timeout=300)
+        if not success:
+            progress.report(2, f"Failed to clone CaVFish: {output}\n\nIf the repository is private, please either:\n1. Make it public on GitHub, or\n2. Set up SSH keys for GitHub access", "error")
+            return False
     
     if not cavfish_dir.exists():
         progress.report(2, "CaVFish directory not created after clone", "error")
@@ -630,30 +634,42 @@ def step_install_pytorch(conda_path: Path):
     progress.report(2, "Force reinstalling PyTorch...", "info")
     run_command([str(conda_path), "install", "-n", ENV_NAME, "-c", "pytorch", "-y", "pytorch", "torchvision", "cpuonly", "--force-reinstall"], timeout=600)
     
-    # Step 21: python -m pip uninstall -y mmcv mmcv-lite mmcv-full
-    progress.report(2, "Uninstalling mmcv variants...", "info")
+    # Step 21: Uninstall all mmcv variants to ensure clean state
+    progress.report(2, "Uninstalling mmcv variants (clean slate)...", "info")
     run_command([str(python_path), "-m", "pip", "uninstall", "-y", "mmcv", "mmcv-lite", "mmcv-full"], timeout=60)
     
-    # Step 22: mim install "mmcv==2.1.0"
-    progress.report(2, "Reinstalling mmcv==2.1.0...", "info")
-    run_command([str(mim_path), "install", "mmcv==2.1.0"], timeout=900)
-    
-    # Step 23: python -m pip uninstall -y numpy
-    progress.report(2, "Uninstalling numpy (second reinstall)...", "info")
+    # Step 22: Re-lock numpy<2 after pytorch reinstall (pytorch may have pulled in numpy>=2)
+    progress.report(2, "Uninstalling numpy (post-pytorch lock)...", "info")
     run_command([str(python_path), "-m", "pip", "uninstall", "-y", "numpy"], timeout=60)
-    
-    # Step 24: conda install -c conda-forge -y "numpy<2" --force-reinstall
-    progress.report(2, "Force reinstalling numpy<2 (second time)...", "info")
+    progress.report(2, "Force reinstalling numpy<2 (post-pytorch lock)...", "info")
     run_command([str(conda_path), "install", "-n", ENV_NAME, "-c", "conda-forge", "-y", "numpy<2", "--force-reinstall"], timeout=180)
     
-    # Step 25: python -m pip uninstall -y mmcv mmcv-lite mmcv-full
-    progress.report(2, "Uninstalling mmcv variants (final)...", "info")
-    run_command([str(python_path), "-m", "pip", "uninstall", "-y", "mmcv", "mmcv-lite", "mmcv-full"], timeout=60)
+    # Step 23: Final mmcv install — try mim first, then pip as fallback
+    progress.report(2, "Installing mmcv==2.1.0 via mim...", "info")
+    mim_ok, mim_out = run_command([str(mim_path), "install", "mmcv==2.1.0"], timeout=900)
     
-    # Step 26: python -m pip install --no-deps "mmcv==2.1.0"
-    progress.report(2, "Installing mmcv==2.1.0 with --no-deps...", "info")
-    run_command([str(python_path), "-m", "pip", "install", "--no-deps", "mmcv==2.1.0"], timeout=300)
+    # Verify mim worked
+    verify_ok, verify_out = run_command([str(python_path), "-c", "import mmcv; print('mmcv OK:', mmcv.__version__)"])
     
+    if not verify_ok or "mmcv OK" not in verify_out:
+        # mim failed or installed a broken package — try pip as fallback
+        progress.report(2, f"mim install did not produce a working mmcv, trying pip fallback...", "warning")
+        run_command([str(python_path), "-m", "pip", "uninstall", "-y", "mmcv", "mmcv-lite", "mmcv-full"], timeout=60)
+        pip_ok, pip_out = run_command(
+            [str(python_path), "-m", "pip", "install", "mmcv==2.1.0"],
+            timeout=600
+        )
+        if not pip_ok:
+            progress.report(2, f"pip install mmcv also failed: {pip_out}", "error")
+            return False
+        
+        # Final verification after pip fallback
+        verify_ok, verify_out = run_command([str(python_path), "-c", "import mmcv; print('mmcv OK:', mmcv.__version__)"])
+        if not verify_ok or "mmcv OK" not in verify_out:
+            progress.report(2, f"mmcv cannot be imported after both mim and pip attempts: {verify_out}", "error")
+            return False
+    
+    progress.report(2, f"✓ mmcv installed: {verify_out.strip()}", "success")
     progress.report(2, "All packages installed successfully", "success")
     return True
 

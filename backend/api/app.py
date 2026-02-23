@@ -188,6 +188,7 @@ def enrich_prediction_with_phenotypes(pred: Dict[str, Any], meta: Dict[str, Any]
     scale_by_sl = meta.get("phenotype_scale_by_sl", False)
     sl_pair = meta.get("phenotype_sl_pair", None)
     phenotype_names = meta.get("phenotype_names", [])
+    phenotype_types = meta.get("phenotype_types", [])
 
     try:
         phenotypes = compute_phenotypes(
@@ -196,6 +197,7 @@ def enrich_prediction_with_phenotypes(pred: Dict[str, Any], meta: Dict[str, Any]
             scale_by_sl=scale_by_sl,
             sl_pair=sl_pair,
             phenotype_names=phenotype_names,
+            phenotype_types=phenotype_types,
         )
 
         # Add phenotypes to extra_pred_fields
