@@ -82,6 +82,52 @@ def get_app_conda_dir() -> Path:
     return get_app_data_dir() / "conda"
 
 
+def conda_executable_from_prefix(prefix: Path) -> Path:
+    """Return conda executable path for a conda install prefix."""
+    if platform.system() == "Windows":
+        return prefix / "Scripts" / "conda.exe"
+    return prefix / "bin" / "conda"
+
+
+def python_candidates_from_env(env_path: Path) -> list[Path]:
+    """Return possible Python executable paths for a conda env."""
+    if platform.system() == "Windows":
+        return [env_path / "python.exe", env_path / "Scripts" / "python.exe"]
+    return [env_path / "bin" / "python"]
+
+
+def python_executable_from_env(env_path: Path) -> Path:
+    """Return preferred Python executable path from a conda env."""
+    for candidate in python_candidates_from_env(env_path):
+        if candidate.exists():
+            return candidate
+    return python_candidates_from_env(env_path)[0]
+
+
+def pip_executable_from_env(env_path: Path) -> Path:
+    """Return preferred pip executable path from a conda env."""
+    if platform.system() == "Windows":
+        return env_path / "Scripts" / "pip.exe"
+    return env_path / "bin" / "pip"
+
+
+def first_path_line(text: str) -> str:
+    """Return first non-empty line from command output."""
+    for line in text.splitlines():
+        if line.strip():
+            return line.strip()
+    return ""
+
+
+def check_git_available() -> bool:
+    """Check if git is available in PATH."""
+    try:
+        result = subprocess.run(["git", "--version"], capture_output=True, text=True)
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
 def install_miniforge(target_dir: Path) -> bool:
     """Download and install Miniforge to the target directory."""
     progress.report(0, "Downloading Miniforge installer...", "info")
@@ -157,7 +203,7 @@ def install_miniforge(target_dir: Path) -> bool:
 def find_conda() -> Optional[Path]:
     """Find conda installation - prioritize app-managed conda."""
     # First check app-managed conda
-    app_conda = get_app_conda_dir() / "bin" / "conda"
+    app_conda = conda_executable_from_prefix(get_app_conda_dir())
     if app_conda.exists():
         return app_conda
     
@@ -165,13 +211,24 @@ def find_conda() -> Optional[Path]:
     home = Path.home()
     
     candidates = [
-        home / "miniforge3" / "bin" / "conda",
-        home / "mambaforge" / "bin" / "conda",
-        home / "miniconda3" / "bin" / "conda",
-        home / "anaconda3" / "bin" / "conda",
-        Path("/opt/homebrew/Caskroom/miniforge/base/bin/conda"),
-        Path("/usr/local/Caskroom/miniforge/base/bin/conda"),
+        conda_executable_from_prefix(home / "miniforge3"),
+        conda_executable_from_prefix(home / "mambaforge"),
+        conda_executable_from_prefix(home / "miniconda3"),
+        conda_executable_from_prefix(home / "anaconda3"),
     ]
+
+    if platform.system() == "Windows":
+        candidates.extend([
+            Path("C:/ProgramData/miniforge3/Scripts/conda.exe"),
+            Path("C:/ProgramData/mambaforge/Scripts/conda.exe"),
+            Path("C:/ProgramData/miniconda3/Scripts/conda.exe"),
+            Path("C:/ProgramData/Anaconda3/Scripts/conda.exe"),
+        ])
+    else:
+        candidates.extend([
+            Path("/opt/homebrew/Caskroom/miniforge/base/bin/conda"),
+            Path("/usr/local/Caskroom/miniforge/base/bin/conda"),
+        ])
     
     for conda_path in candidates:
         if conda_path.exists():
@@ -179,10 +236,13 @@ def find_conda() -> Optional[Path]:
     
     # Try PATH
     try:
-        result = subprocess.run(["which", "conda"], capture_output=True, text=True)
+        lookup = "where" if platform.system() == "Windows" else "which"
+        result = subprocess.run([lookup, "conda"], capture_output=True, text=True)
         if result.returncode == 0:
-            return Path(result.stdout.strip())
-    except:
+            first = first_path_line(result.stdout)
+            if first:
+                return Path(first)
+    except Exception:
         pass
     
     return None
@@ -194,6 +254,10 @@ def run_command(cmd: list, env: dict = None, cwd: str = None, timeout: int = 600
         full_env = os.environ.copy()
         if env:
             full_env.update(env)
+
+        creationflags = 0
+        if platform.system() == "Windows":
+            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         
         result = subprocess.run(
             cmd,
@@ -201,7 +265,8 @@ def run_command(cmd: list, env: dict = None, cwd: str = None, timeout: int = 600
             text=True,
             env=full_env,
             cwd=cwd,
-            timeout=timeout
+            timeout=timeout,
+            creationflags=creationflags,
         )
         return result.returncode == 0, result.stdout + result.stderr
     except subprocess.TimeoutExpired:
@@ -223,7 +288,7 @@ def verify_packages(conda_path: Path) -> bool:
         progress.report(0, "Could not find environment path", "error")
         return False
     
-    python_path = env_path / "bin" / "python"
+    python_path = python_executable_from_env(env_path)
     
     if not python_path.exists():
         progress.report(0, f"Python not found at: {python_path}", "error")
@@ -332,7 +397,7 @@ def ensure_numpy_lt2(conda_path: Path) -> bool:
     if not env_path:
         return False
     
-    python_path = env_path / "bin" / "python"
+    python_path = python_executable_from_env(env_path)
     
     current_version = check_numpy_version(python_path)
     progress.report(0, f"Current NumPy version: {current_version}", "info")
@@ -384,7 +449,7 @@ def step_check_system():
             progress.report(0, "Failed to install Miniforge", "error")
             return None
         
-        conda_path = app_conda_dir / "bin" / "conda"
+        conda_path = conda_executable_from_prefix(app_conda_dir)
         if not conda_path.exists():
             progress.report(0, "Miniforge installed but conda not found", "error")
             return None
@@ -466,7 +531,7 @@ def get_env_path(conda_path: Path) -> Optional[Path]:
                 parts = line.split()
                 # Find the path (last part that looks like a path)
                 for part in reversed(parts):
-                    if '/' in part and ENV_NAME in part:
+                    if ('/' in part or '\\' in part) and ENV_NAME in part:
                         env_path = Path(part)
                         if env_path.exists():
                             return env_path
@@ -487,7 +552,7 @@ def get_env_path(conda_path: Path) -> Optional[Path]:
     ]
     
     for candidate in candidates:
-        if candidate.exists() and (candidate / "bin" / "python").exists():
+        if candidate.exists() and python_executable_from_env(candidate).exists():
             return candidate
     
     return None
@@ -503,10 +568,15 @@ def step_install_pytorch(conda_path: Path):
         progress.report(2, "Failed to locate environment path", "error")
         return False
     
-    python_path = env_path / "bin" / "python"
+    python_path = python_executable_from_env(env_path)
     
     if not python_path.exists():
         progress.report(2, f"Python not found at {python_path}", "error")
+        return False
+
+    if not check_git_available():
+        progress.report(2, "Git is required but was not found in PATH.", "error")
+        progress.report(2, "Install Git for Windows and relaunch setup.", "error")
         return False
     
     # Define CaVFish directory - use app data dir so it works on any machine
@@ -675,7 +745,7 @@ def step_install_dependencies(conda_path: Path, backend_dir: Path):
         progress.report(4, "Failed to locate environment path", "error")
         return False
     
-    pip_path = env_path / "bin" / "pip"
+    pip_path = pip_executable_from_env(env_path)
     
     deps = [
         "fastapi",

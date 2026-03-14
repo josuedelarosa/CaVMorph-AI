@@ -1,0 +1,53 @@
+{
+  "dataset_name": "Cavfish Morphometrics v1",
+  "num_keypoints": 20,
+  "keypoint_names": [
+    "Upper Snout Tip",
+    "Caudal Peduncle Center",
+    "Dorsal Body (behind head)",
+    "Pelvic Fin Base",
+    "Upper Head (pre-orbital)",
+    "Barbel Base",
+    "Mid-Dorsal Trunk",
+    "Ventral Trunk",
+    "Upper Caudal Base",
+    "Lower Caudal Fin Tip",
+    "Eye Center",
+    "Posterior Eye Margin",
+    "Lower Eye Margin",
+    "Lower Jaw Tip",
+    "Operculum Lower Edge",
+    "Pelvic Fin Tip",
+    "Operculum Upper Edge",
+    "Dorsal Fin Tip",
+    "Anal Fin Base",
+    "Anal Fin Tip"
+  ],
+  "codec_input_size": [192, 256],
+  "heatmap_size": [48, 64],
+  "sigma": 2.0,
+  "normalization_mean": [123.675, 116.28, 103.53],
+  "normalization_std": [58.395, 57.12, 57.375],
+  "bgr_to_rgb": true,
+  "padding": 1.25,
+  "phenotype_pairs": [
+    [0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [10, 11],
+    [12, 3], [0, 13], [14, 15], [14, 3],
+    [0, 16], [2, 17], [18, 19]
+  ],
+  "phenotype_names": [
+    "BI", "Bd", "Hd", "CPd", "CFd", "Ed",
+    "Eh", "JI", "PFI", "PFi",
+    "HL", "DL", "AL"
+  ],
+  "phenotype_types": [
+    "x", "y", "y", "y", "y", "y",
+    "y", "xy", "xy", "y",
+    "x", "xy", "xy"
+  ],
+  "phenotype_scale_by_sl": true,
+  "phenotype_sl_pair": [0, 1],
+  "model_version": "cavfish_v1",
+  "onnx_opset": 17,
+  "export_timestamp": ""
+}

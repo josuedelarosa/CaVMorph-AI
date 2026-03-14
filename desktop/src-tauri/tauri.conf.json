@@ -47,20 +47,17 @@
       "active": true,
       "identifier": "com.cavfish.morphometrics",
       "icon": [
-        "icons/icon.png"
+        "icons/icon.ico",
+        "icons/icon.icns"
       ],
-      "targets": [
-        "app",
-        "dmg"
-      ],
+      "targets": "all",
       "externalBin": [],
       "resources": [
-        "setup_first_run.py",
+        "../setup_first_run.py",
         "../../backend/**",
         "../../backend/*.py",
         "../../models/cavfish_v1/*.json",
-        "../../models/cavfish_v1/*.py",
-        "../../models/cavfish_v1/weights.pth"
+        "../../models/cavfish_v1/*.py"
       ]
     },
     "security": {

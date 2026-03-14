@@ -4,18 +4,67 @@ use std::env;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 // ============================================================================
 // Constants
 // ============================================================================
 
 const CONDA_ENV_NAME: &str = "cavfish310";
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+fn apply_windows_no_window(cmd: &mut Command) {
+    #[cfg(target_os = "windows")]
+    {
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+}
+
+fn conda_in_prefix(prefix: &Path) -> PathBuf {
+    #[cfg(target_os = "windows")]
+    {
+        return prefix.join("Scripts").join("conda.exe");
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        return prefix.join("bin").join("conda");
+    }
+}
+
+fn python_candidates_from_env(env_path: &Path) -> Vec<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        return vec![
+            env_path.join("python.exe"),
+            env_path.join("Scripts").join("python.exe"),
+        ];
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        return vec![env_path.join("bin").join("python")];
+    }
+}
+
+fn default_python_command() -> &'static str {
+    #[cfg(target_os = "windows")]
+    {
+        return "python";
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        return "python3";
+    }
+}
 
 // ============================================================================
 // State & Types
@@ -99,29 +148,44 @@ fn get_resource_dir() -> Option<PathBuf> {
 /// Find conda executable
 fn find_conda() -> Option<PathBuf> {
     // First check app-managed conda (new path)
-    let app_conda = get_app_data_dir().join("conda/bin/conda");
+    let app_conda = conda_in_prefix(&get_app_data_dir().join("conda"));
     if app_conda.exists() {
         return Some(app_conda);
     }
     
     // Check old app path for backwards compatibility
     let home = dirs::home_dir()?;
-    let old_app_conda = home.join(".FishMorph/conda/bin/conda");
+    let old_app_conda = conda_in_prefix(&home.join(".FishMorph").join("conda"));
     if old_app_conda.exists() {
         eprintln!("[find_conda] Found conda at old path: {:?}", old_app_conda);
         return Some(old_app_conda);
     }
     
     // Fallback to system conda
-    
-    let candidates = [
-        home.join("miniforge3/bin/conda"),
-        home.join("mambaforge/bin/conda"),
-        home.join("miniconda3/bin/conda"),
-        home.join("anaconda3/bin/conda"),
-        PathBuf::from("/opt/homebrew/Caskroom/miniforge/base/bin/conda"),
-        PathBuf::from("/usr/local/Caskroom/miniforge/base/bin/conda"),
+    let mut candidates = vec![
+        conda_in_prefix(&home.join("miniforge3")),
+        conda_in_prefix(&home.join("mambaforge")),
+        conda_in_prefix(&home.join("miniconda3")),
+        conda_in_prefix(&home.join("anaconda3")),
     ];
+
+    #[cfg(target_os = "windows")]
+    {
+        candidates.extend([
+            PathBuf::from("C:/ProgramData/miniforge3/Scripts/conda.exe"),
+            PathBuf::from("C:/ProgramData/mambaforge/Scripts/conda.exe"),
+            PathBuf::from("C:/ProgramData/miniconda3/Scripts/conda.exe"),
+            PathBuf::from("C:/ProgramData/Anaconda3/Scripts/conda.exe"),
+        ]);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        candidates.extend([
+            PathBuf::from("/opt/homebrew/Caskroom/miniforge/base/bin/conda"),
+            PathBuf::from("/usr/local/Caskroom/miniforge/base/bin/conda"),
+        ]);
+    }
     
     for path in &candidates {
         if path.exists() {
@@ -129,10 +193,16 @@ fn find_conda() -> Option<PathBuf> {
         }
     }
     
-    // Try which conda
-    if let Ok(output) = Command::new("which").arg("conda").output() {
+    // Try shell lookup (where on Windows, which on Unix)
+    let lookup_cmd = if cfg!(target_os = "windows") { "where" } else { "which" };
+    if let Ok(output) = Command::new(lookup_cmd).arg("conda").output() {
         if output.status.success() {
-            let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let path_str = String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .find(|line| !line.trim().is_empty())
+                .unwrap_or_default()
+                .trim()
+                .to_string();
             if !path_str.is_empty() {
                 return Some(PathBuf::from(path_str));
             }
@@ -144,6 +214,14 @@ fn find_conda() -> Option<PathBuf> {
 
 /// Check if setup is complete
 fn is_setup_complete() -> bool {
+    // Check if ONNX thin runtime is available (no Conda needed)
+    if is_onnx_runtime_available().is_some() {
+        if find_runtime_python().is_some() {
+            eprintln!("[is_setup_complete] ONNX runtime path available");
+            return true;
+        }
+    }
+    
     let config_path = get_app_data_dir().join("config.json");
     if config_path.exists() {
         if let Ok(content) = fs::read_to_string(&config_path) {
@@ -249,13 +327,14 @@ fn get_python_path() -> Option<PathBuf> {
             for line in stdout.lines() {
                 if line.contains(CONDA_ENV_NAME) && !line.trim().starts_with('#') {
                     let parts: Vec<&str> = line.split_whitespace().collect();
-                    // Find the path (last part that contains '/')
+                    // Find the path (last part that looks like a path)
                     for part in parts.iter().rev() {
-                        if part.contains('/') && part.contains(CONDA_ENV_NAME) {
+                        if (part.contains('/') || part.contains('\\')) && part.contains(CONDA_ENV_NAME) {
                             let env_path = PathBuf::from(part);
-                            let python_path = env_path.join("bin").join("python");
-                            if python_path.exists() {
-                                return Some(python_path);
+                            for python_path in python_candidates_from_env(&env_path) {
+                                if python_path.exists() {
+                                    return Some(python_path);
+                                }
                             }
                         }
                     }
@@ -270,21 +349,23 @@ fn get_python_path() -> Option<PathBuf> {
     let app_data = get_app_data_dir();
     let old_app_data = home.join(".FishMorph");
     
-    let candidates = [
-        app_data.join("conda/envs").join(CONDA_ENV_NAME).join("bin/python"),
-        old_app_data.join("conda/envs").join(CONDA_ENV_NAME).join("bin/python"),  // Old path
-        home.join(".conda/envs").join(CONDA_ENV_NAME).join("bin/python"),
-        conda_base.join("envs").join(CONDA_ENV_NAME).join("bin/python"),
-        home.join("miniforge3/envs").join(CONDA_ENV_NAME).join("bin/python"),
-        home.join("mambaforge/envs").join(CONDA_ENV_NAME).join("bin/python"),
-        home.join("miniconda3/envs").join(CONDA_ENV_NAME).join("bin/python"),
-        home.join("anaconda3/envs").join(CONDA_ENV_NAME).join("bin/python"),
+    let env_roots = [
+        app_data.join("conda").join("envs").join(CONDA_ENV_NAME),
+        old_app_data.join("conda").join("envs").join(CONDA_ENV_NAME), // Old path
+        home.join(".conda").join("envs").join(CONDA_ENV_NAME),
+        conda_base.join("envs").join(CONDA_ENV_NAME),
+        home.join("miniforge3").join("envs").join(CONDA_ENV_NAME),
+        home.join("mambaforge").join("envs").join(CONDA_ENV_NAME),
+        home.join("miniconda3").join("envs").join(CONDA_ENV_NAME),
+        home.join("anaconda3").join("envs").join(CONDA_ENV_NAME),
     ];
-    
-    for path in &candidates {
-        if path.exists() {
-            eprintln!("[get_python_path] Found Python at: {:?}", path);
-            return Some(path.clone());
+
+    for env_root in &env_roots {
+        for path in python_candidates_from_env(env_root) {
+            if path.exists() {
+                eprintln!("[get_python_path] Found Python at: {:?}", path);
+                return Some(path);
+            }
         }
     }
     
@@ -463,8 +544,199 @@ fn find_free_port() -> Result<u16, String> {
         })
 }
 
-/// Spawn backend process using conda environment
+/// Check if the ONNX thin runtime is available (model.onnx + inference_runtime/)
+fn is_onnx_runtime_available() -> Option<(PathBuf, PathBuf)> {
+    // Check for ONNX model in model dir
+    let model_dir = resolve_model_dir()?;
+    let onnx_path = model_dir.join("model.onnx");
+    let meta_path = model_dir.join("model_metadata.json");
+    
+    if !onnx_path.exists() || !meta_path.exists() {
+        return None;
+    }
+    
+    // Check for inference_runtime
+    let runtime_dir = resolve_inference_runtime_dir()?;
+    let server_script = runtime_dir.join("runtime_server.py");
+    if !server_script.exists() {
+        return None;
+    }
+    
+    Some((runtime_dir, model_dir))
+}
+
+/// Resolve inference_runtime directory
+fn resolve_inference_runtime_dir() -> Option<PathBuf> {
+    let app_data_runtime = get_app_data_dir().join("inference_runtime");
+    if app_data_runtime.exists() {
+        return Some(app_data_runtime);
+    }
+
+    if let Some(resource_dir) = get_resource_dir() {
+        let bundled_runtime = resource_dir.join("inference_runtime");
+        if bundled_runtime.exists() {
+            return Some(bundled_runtime);
+        }
+    }
+
+    // Development fallback
+    if let Ok(cwd) = env::current_dir() {
+        let dev_runtime = cwd.join("inference_runtime");
+        if dev_runtime.exists() {
+            return Some(dev_runtime);
+        }
+    }
+
+    None
+}
+
+/// Find Python for the thin runtime (system Python or pip venv — no Conda required)
+fn find_runtime_python() -> Option<PathBuf> {
+    // First try PHENOAI_PYTHON env var
+    if let Ok(p) = env::var("PHENOAI_PYTHON") {
+        let path = PathBuf::from(&p);
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    // Try the conda env python (backwards compatible)
+    if let Some(conda_python) = get_python_path() {
+        return Some(conda_python);
+    }
+
+    // Try app-local venv
+    let app_data = get_app_data_dir();
+    let venv_python_candidates = vec![
+        app_data.join("venv").join("Scripts").join("python.exe"),  // Windows
+        app_data.join("venv").join("bin").join("python"),          // Unix
+    ];
+    for p in &venv_python_candidates {
+        if p.exists() {
+            return Some(p.clone());
+        }
+    }
+
+    // Try system Python
+    let system_cmd = default_python_command();
+    if let Ok(output) = Command::new(system_cmd).arg("--version").output() {
+        if output.status.success() {
+            return Some(PathBuf::from(system_cmd));
+        }
+    }
+
+    None
+}
+
+/// Spawn thin ONNX inference runtime (no Conda required)
+fn spawn_backend_onnx(port: u16, runtime_dir: &Path, model_dir: &Path) -> Result<(Child, String), String> {
+    let python_path = find_runtime_python()
+        .ok_or_else(|| "Python not found for inference runtime".to_string())?;
+    
+    eprintln!("[spawn_backend_onnx] Using thin ONNX runtime");
+    eprintln!("[spawn_backend_onnx] Python: {:?}", python_path);
+    eprintln!("[spawn_backend_onnx] Runtime dir: {:?}", runtime_dir);
+    eprintln!("[spawn_backend_onnx] Model dir: {:?}", model_dir);
+    
+    let app_data_dir = get_app_data_dir();
+    let logs_dir = app_data_dir.join("logs");
+    let _ = fs::create_dir_all(&logs_dir);
+    let backend_log_path = logs_dir.join("backend.log");
+    
+    let runtime_parent = runtime_dir.parent().unwrap_or(runtime_dir);
+    let startup_script = format!(
+        r#"
+import sys, os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+sys.path.insert(0, '{}')
+os.environ['FISH_MODEL_DIR'] = '{}'
+os.environ['FISH_PORT'] = '{}'
+os.environ['FISH_DEVICE'] = 'cpu'
+from inference_runtime.runtime_server import app
+import uvicorn
+uvicorn.run(app, host='127.0.0.1', port={}, log_level='info')
+"#,
+        runtime_parent.to_string_lossy().replace('\\', "\\\\").replace('\'', "\\'"),
+        model_dir.to_string_lossy().replace('\\', "\\\\").replace('\'', "\\'"),
+        port,
+        port,
+    );
+
+    let mut cmd = Command::new(&python_path);
+    apply_windows_no_window(&mut cmd);
+    cmd.arg("-c");
+    cmd.arg(&startup_script);
+    cmd.env("FISH_PORT", port.to_string());
+    cmd.env("FISH_DEVICE", "cpu");
+    cmd.env("FISH_MODEL_DIR", model_dir.to_string_lossy().to_string());
+    cmd.env("KMP_DUPLICATE_LIB_OK", "TRUE");
+    cmd.env("PYTHONDONTWRITEBYTECODE", "1");
+    
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+    
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("Failed to spawn ONNX runtime: {}", e))?;
+    
+    eprintln!("[spawn_backend_onnx] Process spawned PID: {:?}", child.id());
+    let base_url = format!("http://127.0.0.1:{}", port);
+    
+    // Capture output threads
+    let stderr_log_path = backend_log_path.clone();
+    if let Some(stderr) = child.stderr.take() {
+        thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines().flatten() {
+                eprintln!("[onnx-runtime stderr] {}", line);
+                if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(&stderr_log_path) {
+                    let _ = writeln!(file, "[stderr] {}", line);
+                }
+            }
+        });
+    }
+    let stdout_log_path = backend_log_path;
+    if let Some(stdout) = child.stdout.take() {
+        thread::spawn(move || {
+            let reader = BufReader::new(stdout);
+            for line in reader.lines().flatten() {
+                eprintln!("[onnx-runtime stdout] {}", line);
+                if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(&stdout_log_path) {
+                    let _ = writeln!(file, "[stdout] {}", line);
+                }
+            }
+        });
+    }
+    
+    // Wait for server ready
+    let start = std::time::Instant::now();
+    let timeout = Duration::from_secs(30); // ONNX runtime starts faster
+    loop {
+        if start.elapsed() > timeout {
+            let _ = child.kill();
+            return Err("ONNX runtime startup timeout (30s)".to_string());
+        }
+        if let Ok(Some(status)) = child.try_wait() {
+            return Err(format!("ONNX runtime crashed: {:?}", status));
+        }
+        if TcpListener::bind(format!("127.0.0.1:{}", port)).is_err() {
+            eprintln!("[spawn_backend_onnx] Port {} ready!", port);
+            return Ok((child, base_url));
+        }
+        thread::sleep(Duration::from_millis(200));
+    }
+}
+
+/// Spawn backend process using conda environment (LEGACY path)
 fn spawn_backend(port: u16) -> Result<(Child, String), String> {
+    // Try thin ONNX runtime first
+    if let Some((runtime_dir, model_dir)) = is_onnx_runtime_available() {
+        eprintln!("[spawn_backend] ONNX runtime available, using thin path");
+        return spawn_backend_onnx(port, &runtime_dir, &model_dir);
+    }
+    
+    eprintln!("[spawn_backend] ONNX runtime not available, using legacy MMPose path");
+    
     let python_path = get_python_path()
         .ok_or_else(|| "Python not found in conda environment".to_string())?;
     
@@ -479,8 +751,22 @@ fn spawn_backend(port: u16) -> Result<(Child, String), String> {
     let backend_log_path = logs_dir.join("backend.log");
     
     // Create cache directories outside .app bundle to prevent AMFI violations
-    let home_dir = dirs::home_dir().ok_or("Cannot determine home directory")?;
-    let cache_base = home_dir.join("Library/Caches/PhenoAI");
+    #[cfg(target_os = "macos")]
+    let cache_base = dirs::home_dir()
+        .ok_or("Cannot determine home directory")?
+        .join("Library")
+        .join("Caches")
+        .join("PhenoAI");
+
+    #[cfg(target_os = "windows")]
+    let cache_base = dirs::cache_dir()
+        .unwrap_or_else(get_app_data_dir)
+        .join("PhenoAI");
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let cache_base = dirs::cache_dir()
+        .unwrap_or_else(get_app_data_dir)
+        .join("phenoai");
     let pycache_dir = cache_base.join("pycache");
     let torch_cache = cache_base.join("torch");
     let mpl_cache = cache_base.join("matplotlib");
@@ -497,6 +783,7 @@ fn spawn_backend(port: u16) -> Result<(Child, String), String> {
     
     // Determine which backend module to use
     let mut cmd = Command::new(&python_path);
+    apply_windows_no_window(&mut cmd);
     
     if let Some(backend_dir) = &backend_dir {
         // Production: run from copied backend in app data
@@ -749,15 +1036,7 @@ fn check_conda_installed() -> Result<String, String> {
 
 #[tauri::command]
 fn check_conda_env_exists() -> bool {
-    if let Some(conda_path) = find_conda() {
-        let conda_base = conda_path.parent().and_then(|p| p.parent());
-        if let Some(base) = conda_base {
-            let env_path = base.join("envs").join(CONDA_ENV_NAME);
-            let python_path = env_path.join("bin").join("python");
-            return python_path.exists();
-        }
-    }
-    false
+    get_python_path().is_some()
 }
 
 #[tauri::command]
@@ -789,21 +1068,29 @@ async fn run_first_time_setup(app: AppHandle) -> Result<(), String> {
     } else if let Some(conda_path) = find_conda() {
         let conda_base = conda_path.parent().and_then(|p| p.parent());
         if let Some(base) = conda_base {
-            let conda_python = base.join("bin").join("python");
-            if conda_python.exists() {
+            let mut selected: Option<PathBuf> = None;
+            for candidate in python_candidates_from_env(base) {
+                if candidate.exists() {
+                    selected = Some(candidate);
+                    break;
+                }
+            }
+
+            if let Some(conda_python) = selected {
                 conda_python.to_string_lossy().to_string()
             } else {
-                "python3".to_string()
+                default_python_command().to_string()
             }
         } else {
-            "python3".to_string()
+            default_python_command().to_string()
         }
     } else {
-        "python3".to_string()
+        default_python_command().to_string()
     };
     
     // Spawn setup process
     let mut cmd = Command::new(&python);
+    apply_windows_no_window(&mut cmd);
     cmd.arg(&setup_script);
     cmd.arg("--backend-dir");
     cmd.arg(&backend_dir);

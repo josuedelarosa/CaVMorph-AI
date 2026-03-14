@@ -241,7 +241,7 @@ const useExistingEnv = async () => {
   
   try {
     // First verify that the environment is actually complete
-    const isComplete = await invoke('check_if_setup_needed')
+    const isComplete = await invoke('check_setup_needed')
     
     if (isComplete === false) {
       // Environment exists and is complete
@@ -300,10 +300,13 @@ const startSetup = async () => {
     })
 
     await listen('setup-error', (event: any) => {
+      const message = typeof event.payload === 'string'
+        ? event.payload
+        : (event.payload?.message || 'Unknown setup error')
       setupError.value = true
       steps.value[currentStep.value].error = true
-      statusMessage.value = `Error: ${event.payload.message}`
-      addLog(`✗ ${event.payload.message}`, 'error')
+      statusMessage.value = `Error: ${message}`
+      addLog(`✗ ${message}`, 'error')
     })
 
     // Start the setup process

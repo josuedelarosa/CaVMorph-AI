@@ -1,0 +1,21 @@
+# Model Build — Requirements
+# These are needed ONLY for exporting/validating models.
+# NOT needed for the production runtime.
+
+# PyTorch (CPU-only is sufficient for export)
+torch>=2.1.0
+torchvision>=0.16.0
+
+# OpenMMLab stack (needed to load the source model)
+mmengine>=0.10.5
+mmcv>=2.1.0
+# mmpose — installed from CaVFish fork (see setup_environment.sh)
+# mmpretrain>=1.2.0
+
+# ONNX export and validation
+onnx>=1.15.0
+onnxruntime>=1.17.0
+
+# Shared dependencies
+numpy>=1.24.0,<2.0
+opencv-python>=4.8.0
