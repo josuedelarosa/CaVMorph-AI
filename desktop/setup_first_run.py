@@ -504,7 +504,6 @@ def step_install_pytorch(conda_path: Path):
         return False
     
     python_path = env_path / "bin" / "python"
-    mim_path = env_path / "bin" / "mim"
     
     if not python_path.exists():
         progress.report(2, f"Python not found at {python_path}", "error")
@@ -544,11 +543,14 @@ def step_install_pytorch(conda_path: Path):
     
     # Step 8: mim install "mmengine==0.10.7"
     progress.report(2, "Installing mmengine==0.10.7...", "info")
-    run_command([str(mim_path), "install", "mmengine==0.10.7"], timeout=300)
+    run_command([str(python_path), "-m", "mim", "install", "mmengine==0.10.7", "--no-build-isolation"], timeout=300)
     
     # Step 9: mim install "mmcv==2.1.0"
     progress.report(2, "Installing mmcv==2.1.0...", "info")
-    run_command([str(mim_path), "install", "mmcv==2.1.0"], timeout=900)
+    run_command([str(python_path), "-m", "mim", "install", "mmcv==2.1.0", "--no-build-isolation"], timeout=900)
+    # Re-lock numpy<2: mim build process can pull in numpy>=2
+    run_command([str(python_path), "-m", "pip", "uninstall", "-y", "numpy"], timeout=60)
+    run_command([str(conda_path), "install", "-n", ENV_NAME, "-c", "conda-forge", "-y", "numpy<2", "--force-reinstall"], timeout=180)
     
     # Step 10: conda install -c conda-forge -y chumpy
     progress.report(2, "Installing chumpy...", "info")
@@ -605,11 +607,11 @@ def step_install_pytorch(conda_path: Path):
     
     # Step 16: mim install "mmpretrain==1.2.0"
     progress.report(2, "Installing mmpretrain==1.2.0...", "info")
-    run_command([str(mim_path), "install", "mmpretrain==1.2.0"], timeout=300)
+    run_command([str(python_path), "-m", "mim", "install", "mmpretrain==1.2.0", "--no-build-isolation"], timeout=300)
     
     # Step 17: mim install 'mmdet==3.3.0'
     progress.report(2, "Installing mmdet==3.3.0...", "info")
-    run_command([str(mim_path), "install", "mmdet==3.3.0"], timeout=600)
+    run_command([str(python_path), "-m", "mim", "install", "mmdet==3.3.0", "--no-build-isolation"], timeout=600)
     
     # Note: mmpose is installed via CaVFish requirements.txt (Step 14)
     
@@ -625,42 +627,34 @@ def step_install_pytorch(conda_path: Path):
     progress.report(2, "Force reinstalling PyTorch...", "info")
     run_command([str(conda_path), "install", "-n", ENV_NAME, "-c", "pytorch", "-y", "pytorch", "torchvision", "cpuonly", "--force-reinstall"], timeout=600)
     
-    # Step 21: Uninstall all mmcv variants to ensure clean state
-    progress.report(2, "Uninstalling mmcv variants (clean slate)...", "info")
-    run_command([str(python_path), "-m", "pip", "uninstall", "-y", "mmcv", "mmcv-lite", "mmcv-full"], timeout=60)
-    
-    # Step 22: Re-lock numpy<2 after pytorch reinstall (pytorch may have pulled in numpy>=2)
+    # Step 21-22: Re-lock numpy<2 (pytorch force-reinstall may have pulled in numpy>=2)
     progress.report(2, "Uninstalling numpy (post-pytorch lock)...", "info")
     run_command([str(python_path), "-m", "pip", "uninstall", "-y", "numpy"], timeout=60)
-    progress.report(2, "Force reinstalling numpy<2 (post-pytorch lock)...", "info")
+    progress.report(2, "Force reinstalling numpy<2 (final lock)...", "info")
     run_command([str(conda_path), "install", "-n", ENV_NAME, "-c", "conda-forge", "-y", "numpy<2", "--force-reinstall"], timeout=180)
     
-    # Step 23: Final mmcv install — try mim first, then pip as fallback
-    progress.report(2, "Installing mmcv==2.1.0 via mim...", "info")
-    mim_ok, mim_out = run_command([str(mim_path), "install", "mmcv==2.1.0"], timeout=900)
-    
-    # Verify mim worked
+    # Step 23: Verify mmcv - only reinstall if broken (prior mim install may have already succeeded)
+    progress.report(2, "Checking mmcv...", "info")
     verify_ok, verify_out = run_command([str(python_path), "-c", "import mmcv; print('mmcv OK:', mmcv.__version__)"])
-    
     if not verify_ok or "mmcv OK" not in verify_out:
-        # mim failed or installed a broken package — try pip as fallback
-        progress.report(2, f"mim install did not produce a working mmcv, trying pip fallback...", "warning")
+        progress.report(2, "mmcv not importable, attempting mim install...", "warning")
         run_command([str(python_path), "-m", "pip", "uninstall", "-y", "mmcv", "mmcv-lite", "mmcv-full"], timeout=60)
-        pip_ok, pip_out = run_command(
-            [str(python_path), "-m", "pip", "install", "mmcv==2.1.0"],
-            timeout=600
-        )
-        if not pip_ok:
-            progress.report(2, f"pip install mmcv also failed: {pip_out}", "error")
-            return False
-        
-        # Final verification after pip fallback
+        run_command([str(python_path), "-m", "mim", "install", "mmcv==2.1.0", "--no-build-isolation"], timeout=900)
+        # Re-lock numpy<2 after mim (mim build can pull in numpy>=2)
+        run_command([str(python_path), "-m", "pip", "uninstall", "-y", "numpy"], timeout=60)
+        run_command([str(conda_path), "install", "-n", ENV_NAME, "-c", "conda-forge", "-y", "numpy<2", "--force-reinstall"], timeout=180)
         verify_ok, verify_out = run_command([str(python_path), "-c", "import mmcv; print('mmcv OK:', mmcv.__version__)"])
         if not verify_ok or "mmcv OK" not in verify_out:
-            progress.report(2, f"mmcv cannot be imported after both mim and pip attempts: {verify_out}", "error")
-            return False
+            progress.report(2, "mim failed, trying pip fallback...", "warning")
+            run_command([str(python_path), "-m", "pip", "uninstall", "-y", "mmcv", "mmcv-lite", "mmcv-full"], timeout=60)
+            pip_ok, pip_out = run_command([str(python_path), "-m", "pip", "install", "mmcv==2.1.0", "--no-build-isolation"], timeout=600)
+            progress.report(2, f"pip output: {pip_out[:500]}", "info")
+            verify_ok, verify_out = run_command([str(python_path), "-c", "import mmcv; print('mmcv OK:', mmcv.__version__)"])
+            if not verify_ok or "mmcv OK" not in verify_out:
+                progress.report(2, f"mmcv could not be installed: {verify_out}", "error")
+                return False
     
-    progress.report(2, f"✓ mmcv installed: {verify_out.strip()}", "success")
+    progress.report(2, f"\u2713 mmcv ready: {verify_out.strip()}", "success")
     progress.report(2, "All packages installed successfully", "success")
     return True
 
