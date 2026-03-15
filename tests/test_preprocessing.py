@@ -157,8 +157,10 @@ class TestPreprocessMMPoseParity:
         data_dict = {
             "img": img,
             "img_path": "",
-            "bbox": np.array([0, 0, w, h], dtype=np.float32),
+            "bbox": np.array([[0, 0, w, h]], dtype=np.float32),
             "bbox_score": np.array([1.0], dtype=np.float32),
+            "bbox_center": np.array([[w / 2, h / 2]], dtype=np.float32),
+            "bbox_scale": np.array([[float(w), float(h)]], dtype=np.float32),
             "ori_shape": (h, w),
             "img_shape": (h, w),
         }
