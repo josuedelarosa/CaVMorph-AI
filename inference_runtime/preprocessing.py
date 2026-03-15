@@ -38,39 +38,34 @@ def get_warp_matrix_udp(
     Returns:
         2x3 affine transformation matrix.
     """
-    src_w = scale[0]
-    src_h = scale[1]
-    dst_w, dst_h = output_size
+    # Match MMPose UDP warp matrix (pixel-center aligned):
+    # scale_x = (dst_w - 1) / src_w, scale_y = (dst_h - 1) / src_h
+    # then apply rotation + translation in closed form.
+    src_w = float(scale[0])
+    src_h = float(scale[1])
+    dst_w, dst_h = int(output_size[0]), int(output_size[1])
 
-    rot_rad = np.deg2rad(rot)
-    cos_r = np.cos(rot_rad)
-    sin_r = np.sin(rot_rad)
+    rot_rad = float(np.deg2rad(rot))
+    cos_r = float(np.cos(rot_rad))
+    sin_r = float(np.sin(rot_rad))
 
-    # Source points (UDP-style: pixel centers)
-    src_dir = np.array([0, src_w * -0.5], dtype=np.float32)
-    src_dir_rot = np.array(
-        [src_dir[0] * cos_r - src_dir[1] * sin_r,
-         src_dir[0] * sin_r + src_dir[1] * cos_r],
-        dtype=np.float32,
+    scale_x = (dst_w - 1.0) / src_w
+    scale_y = (dst_h - 1.0) / src_h
+
+    tx = scale_x * (
+        -0.5 * src_w * cos_r + 0.5 * src_h * sin_r + float(center[0])
+    )
+    ty = scale_y * (
+        -0.5 * src_w * sin_r - 0.5 * src_h * cos_r + float(center[1])
     )
 
-    src = np.zeros((3, 2), dtype=np.float32)
-    src[0] = center
-    src[1] = center + src_dir_rot
-    # Third point is perpendicular
-    src[2] = src[1] + np.array([-src_dir_rot[1], src_dir_rot[0]])
-
-    dst = np.zeros((3, 2), dtype=np.float32)
-    dst[0] = np.array([dst_w * 0.5, dst_h * 0.5], dtype=np.float32)
-    dst[1] = np.array([dst_w * 0.5, dst_h * 0.5 - dst_w * 0.5], dtype=np.float32)
-    dst[2] = dst[1] + np.array([dst_w * 0.5, 0], dtype=np.float32)  # perpendicular
-
-    # UDP pixel alignment: shift by -0.5 then +0.5 to align to pixel grid
-    dst[0] += -0.5
-    dst[1] += -0.5
-    dst[2] += -0.5
-
-    warp_mat = cv2.getAffineTransform(src.astype(np.float32), dst.astype(np.float32))
+    warp_mat = np.array(
+        [
+            [scale_x * cos_r, -scale_x * sin_r, tx],
+            [scale_y * sin_r, scale_y * cos_r, ty],
+        ],
+        dtype=np.float32,
+    )
     return warp_mat
 
 
