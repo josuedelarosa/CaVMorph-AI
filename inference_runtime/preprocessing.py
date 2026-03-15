@@ -38,12 +38,12 @@ def get_warp_matrix_udp(
     Returns:
         2x3 affine transformation matrix.
     """
-    # Match MMPose UDP warp matrix (pixel-center aligned):
-    # scale_x = (dst_w - 1) / src_w, scale_y = (dst_h - 1) / src_h
-    # then apply rotation + translation in closed form.
+    # Direct port of MMPose's get_udp_warp_matrix to preserve pixel-center
+    # conventions exactly.
     src_w = float(scale[0])
     src_h = float(scale[1])
     dst_w, dst_h = int(output_size[0]), int(output_size[1])
+    input_size = np.asarray(center, dtype=np.float32) * 2.0
 
     rot_rad = float(np.deg2rad(rot))
     cos_r = float(np.cos(rot_rad))
@@ -53,10 +53,14 @@ def get_warp_matrix_udp(
     scale_y = (dst_h - 1.0) / src_h
 
     tx = scale_x * (
-        -0.5 * src_w * cos_r + 0.5 * src_h * sin_r + float(center[0])
+        -0.5 * float(input_size[0]) * cos_r
+        + 0.5 * float(input_size[1]) * sin_r
+        + 0.5 * src_w
     )
     ty = scale_y * (
-        -0.5 * src_w * sin_r - 0.5 * src_h * cos_r + float(center[1])
+        -0.5 * float(input_size[0]) * sin_r
+        - 0.5 * float(input_size[1]) * cos_r
+        + 0.5 * src_h
     )
 
     warp_mat = np.array(

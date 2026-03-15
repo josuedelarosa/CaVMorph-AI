@@ -58,6 +58,22 @@ class TestWarpMatrixUDP:
         # Should be close to identity (with UDP offset)
         assert mat.shape == (2, 3)
 
+    def test_matches_mmpose_udp_helper(self):
+        try:
+            from mmpose.structures.bbox import get_udp_warp_matrix as mmpose_get_udp_warp_matrix
+        except ImportError:
+            pytest.skip("MMPose not available, skipping UDP helper parity test")
+
+        center = np.array([320.0, 240.0], dtype=np.float32)
+        scale = np.array([800.0, 1066.6666], dtype=np.float32)
+
+        ours = get_warp_matrix_udp(center, scale, rot=17.5, output_size=(192, 256))
+        mmpose = mmpose_get_udp_warp_matrix(
+            center, scale, rot=17.5, output_size=(192, 256)
+        )
+
+        np.testing.assert_allclose(ours, mmpose, rtol=0.0, atol=1e-6)
+
     def test_warp_matrix_invertible(self):
         center = np.array([320.0, 240.0], dtype=np.float32)
         scale = np.array([800.0, 600.0], dtype=np.float32)
@@ -120,8 +136,8 @@ class TestPreprocessMMPoseParity:
     @pytest.fixture
     def mmpose_available(self):
         try:
-            from mmengine.config import Config
             from mmengine.dataset import Compose
+            from mmpose.models import PoseDataPreprocessor
             return True
         except ImportError:
             pytest.skip("MMPose not available, skipping parity test")
@@ -130,6 +146,7 @@ class TestPreprocessMMPoseParity:
         """Validate that our preprocessing matches MMPose's output."""
         from mmengine.registry import init_default_scope
         from mmengine.dataset import Compose
+        from mmpose.models import PoseDataPreprocessor
 
         init_default_scope("mmpose")
 
@@ -163,31 +180,23 @@ class TestPreprocessMMPoseParity:
             "img_shape": (h, w),
         }
         processed = pipeline(data_dict)
-        mmpose_input = processed["inputs"]  # Tensor (3, 256, 192)
-
-        # Build a reference normalized tensor from the MMPose pipeline output.
-        # Depending on the transform implementation, this tensor may be BGR or RGB
-        # before PoseDataPreprocessor. Evaluate both and accept the closer match.
-        mmpose_chw = mmpose_input.numpy().astype(np.float32)
-        mmpose_hwc = mmpose_chw.transpose(1, 2, 0)
-
-        mean_arr = np.array([123.675, 116.28, 103.53], dtype=np.float32).reshape(1, 1, 3)
-        std_arr = np.array([58.395, 57.12, 57.375], dtype=np.float32).reshape(1, 1, 3)
-
-        # Candidate A: tensor is BGR, so apply BGR->RGB then normalize
-        ref_rgb_from_bgr = mmpose_hwc[:, :, ::-1]
-        ref_norm_from_bgr = ((ref_rgb_from_bgr - mean_arr) / std_arr).transpose(2, 0, 1)
-
-        # Candidate B: tensor is already RGB, normalize directly
-        ref_norm_from_rgb = ((mmpose_hwc - mean_arr) / std_arr).transpose(2, 0, 1)
+        data_preprocessor = PoseDataPreprocessor(
+            mean=[123.675, 116.28, 103.53],
+            std=[58.395, 57.12, 57.375],
+            bgr_to_rgb=True,
+        )
+        preprocessed = data_preprocessor(
+            {
+                "inputs": [processed["inputs"]],
+                "data_samples": [processed["data_samples"]],
+            },
+            training=False,
+        )
+        mmpose_input = preprocessed["inputs"][0].detach().cpu().numpy()
 
         ours = tensor_ours[0]
-        max_diff_from_bgr = float(np.max(np.abs(ours - ref_norm_from_bgr)))
-        max_diff_from_rgb = float(np.max(np.abs(ours - ref_norm_from_rgb)))
-        max_diff = min(max_diff_from_bgr, max_diff_from_rgb)
+        max_diff = float(np.max(np.abs(ours - mmpose_input)))
 
         assert max_diff < 1e-3, (
-            f"Normalized tensor max diff too high: {max_diff:.6f}. "
-            f"assuming-BGR diff={max_diff_from_bgr:.6f}, "
-            f"assuming-RGB diff={max_diff_from_rgb:.6f}"
+            f"Normalized tensor max diff too high: {max_diff:.6f}"
         )
