@@ -539,19 +539,9 @@ const activeProfiles = computed(() => {
 
 const filteredPredictions = computed(() => {
   if (!selectedProfileFilter.value) {
-    console.log('[Filtered] No filter, returning', predictions.value.length, 'predictions')
-    if (predictions.value.length > 0) {
-      console.log('[Filtered] First pred has overlay_png_base64:', !!predictions.value[0].overlay_png_base64, 'length:', predictions.value[0].overlay_png_base64?.length)
-      console.log('[Filtered] First pred image_path:', predictions.value[0].image_path)
-    }
     return predictions.value
   }
-  const filtered = predictions.value.filter((pred: any) => pred.profile_id === selectedProfileFilter.value)
-  console.log('[Filtered] Profile filter applied:', selectedProfileFilter.value, 'returned', filtered.length, 'predictions')
-  if (filtered.length > 0) {
-    console.log('[Filtered] First filtered pred has overlay_png_base64:', !!filtered[0].overlay_png_base64)
-  }
-  return filtered
+  return predictions.value.filter((pred: any) => pred.profile_id === selectedProfileFilter.value)
 })
 
 const hasActiveFoldersSelected = computed(() => {
@@ -671,27 +661,6 @@ async function startAnalysis() {
         profile_id: profile.id,
       }))
       
-      // Log first prediction to check if overlay_png_base64 is present
-      if (withProfile.length > 0) {
-        const first = withProfile[0]
-        console.log('📦 First prediction data:', {
-          image_path: first.image_path,
-          has_overlay_base64: !!first.overlay_png_base64,
-          overlay_length: first.overlay_png_base64?.length || 0,
-          overlay_preview: first.overlay_png_base64 ? first.overlay_png_base64.substring(0, 50) + '...' : 'none',
-          has_keypoints: !!first.keypoints,
-          keypoint_count: first.keypoints?.length || 0
-        })
-        
-        // TEST: Try to create an image immediately to verify data
-        if (first.overlay_png_base64) {
-          const testImg = new Image()
-          testImg.onload = () => console.log('✅ TEST: Base64 image loads OK:', testImg.width, 'x', testImg.height)
-          testImg.onerror = (e) => console.error('❌ TEST: Base64 image failed to load:', e)
-          testImg.src = 'data:image/jpeg;base64,' + first.overlay_png_base64
-        }
-      }
-      
       allPredictions.push(...withProfile)
       totalProcessed += result.count
     }
@@ -723,13 +692,9 @@ async function startAnalysis() {
 function filterPredictionsByProfile(pred: PredictionResult, profile: Profile): PredictionResult {
   const selectedKpts = new Set(profile.selected_keypoints)
   
-  console.log('[Filter Pred] Profile selected keypoints:', Array.from(selectedKpts))
-  
   // Get keypoints and scores
   let kpts = pred.keypoints || []
   let scores = pred.keypoint_scores || []
-  
-  console.log('[Filter Pred] Original keypoints count:', kpts.length)
   
   // Flatten nested arrays if needed
   if (Array.isArray(kpts) && kpts.length > 0 && Array.isArray(kpts[0]) && Array.isArray(kpts[0][0])) {
@@ -758,17 +723,12 @@ function filterPredictionsByProfile(pred: PredictionResult, profile: Profile): P
     }
   }
   
-  console.log('[Filter Pred] Filtered keypoints count:', filteredKpts.length)
-  console.log('[Filter Pred] Keypoint IDs preserved:', keypointIds)
-  
   // Filter phenotypes - only include if both keypoints are selected
   const phenotypes = pred.extra_pred_fields?.phenotypes || []
   const filteredPhenotypes = phenotypes.filter(p => {
     const [kp1, kp2] = modelInfo.value?.phenotype_pairs?.[p.id] || [p.pair[0], p.pair[1]]
     return selectedKpts.has(kp1) && selectedKpts.has(kp2)
   })
-  
-  console.log('[Filter Pred] Original phenotypes:', phenotypes.length, 'Filtered:', filteredPhenotypes.length)
   
   // Return filtered prediction with dict-format keypoints (preserves IDs)
   return {
@@ -806,17 +766,8 @@ async function exportResults(format: 'csv' | 'json' | 'images') {
       const profile = profiles.value.find(p => p.id === profileId)
       if (!profile) continue
 
-      console.log('[Export] Profile:', profile.name)
-      console.log('[Export] Profile selected_keypoints:', profile.selected_keypoints)
-      console.log('[Export] Before filtering - predictions count:', profilePreds.length)
-      console.log('[Export] Before filtering - sample keypoints:', profilePreds[0]?.keypoints?.length)
-
       // Filter predictions to only include selected keypoints and phenotypes
       const filteredPreds = profilePreds.map(pred => filterPredictionsByProfile(pred, profile))
-
-      console.log('[Export] After filtering - predictions count:', filteredPreds.length)
-      console.log('[Export] After filtering - sample keypoints:', filteredPreds[0]?.keypoints?.length)
-      console.log('[Export] After filtering - sample phenotypes:', filteredPreds[0]?.extra_pred_fields?.phenotypes?.length)
 
       let outputPath = ''
 
@@ -881,76 +832,60 @@ function drawPreview() {
   
   ctx.scale(dpr, dpr)
 
-  // Prefer overlay_png_base64 from backend if available
-  console.log('🖼️ drawPreview called:', {
-    has_overlay_base64: !!pred.overlay_png_base64,
-    overlay_length: pred.overlay_png_base64?.length || 0,
-    image_path: pred.image_path
-  })
-  
-  // IMPORTANT: Do NOT use overlay_png_base64 because it has ALL keypoints pre-rendered
-  // Instead, always load the raw image and draw filtered keypoints on top
-  console.log('📂 Loading RAW image to draw filtered keypoints')
-  
-  // Fallback: Try to load and draw image from file path
-  function loadImageFromPath() {
-    console.log('⚠️ No overlay_png_base64, falling back to file path loading')
-    const imagePath = pred.image_path
-    console.log('📂 Loading from path:', imagePath)
+  // Shared draw callback once an image is loaded
+  function drawLoadedImage(img: HTMLImageElement) {
+    const displayWidth = canvas.width / dpr
+    const displayHeight = canvas.height / dpr
+    const scale = Math.min(displayWidth / img.width, displayHeight / img.height)
+    const scaledWidth = img.width * scale
+    const scaledHeight = img.height * scale
+    const offsetX = (displayWidth - scaledWidth) / 2
+    const offsetY = (displayHeight - scaledHeight) / 2
 
-    if (imagePath) {
-      const img = new Image()
-
-      // Read file using Tauri API and convert to data URL
-      readBinaryFile(imagePath)
-        .then((data) => {
-          const ext = imagePath.toLowerCase().split('.').pop()
-          const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg'
-          const blob = new Blob([data], { type: mimeType })
-          const dataUrl = URL.createObjectURL(blob)
-          console.log('Created data URL for image')
-          img.src = dataUrl
-        })
-        .catch((err) => {
-          console.error('Failed to read file:', err)
-          ctx.fillStyle = '#f0f0f0'
-          ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr)
-          drawKeypointsOnCanvas(ctx, pred, canvas, null, 1, 0, 0, dpr)
-        })
-
-      img.onload = () => {
-        console.log('Image loaded successfully from file:', imagePath)
-        const displayWidth = canvas.width / dpr
-        const displayHeight = canvas.height / dpr
-
-        const scale = Math.min(displayWidth / img.width, displayHeight / img.height)
-        const scaledWidth = img.width * scale
-        const scaledHeight = img.height * scale
-        const offsetX = (displayWidth - scaledWidth) / 2
-        const offsetY = (displayHeight - scaledHeight) / 2
-
-        ctx.fillStyle = '#f0f0f0'
-        ctx.fillRect(0, 0, displayWidth, displayHeight)
-        ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight)
-        drawKeypointsOnCanvas(ctx, pred, canvas, img, scale, offsetX, offsetY, dpr)
-      }
-
-      img.onerror = (e) => {
-        console.error('Failed to load image:', imagePath, e)
-        console.log('Falling back to keypoints only on gray background')
-        ctx.fillStyle = '#f0f0f0'
-        ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr)
-        drawKeypointsOnCanvas(ctx, pred, canvas, null, 1, 0, 0, dpr)
-      }
-    } else {
-      console.warn('No image path provided')
-      ctx.fillStyle = '#f0f0f0'
-      ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr)
-      drawKeypointsOnCanvas(ctx, pred, canvas, null, 1, 0, 0, dpr)
-    }
+    ctx.fillStyle = '#f0f0f0'
+    ctx.fillRect(0, 0, displayWidth, displayHeight)
+    ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight)
+    drawKeypointsOnCanvas(ctx, pred, canvas, img, scale, offsetX, offsetY, dpr)
   }
 
-  loadImageFromPath()
+  function drawFallbackGray() {
+    ctx.fillStyle = '#f0f0f0'
+    ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr)
+    drawKeypointsOnCanvas(ctx, pred, canvas, null, 1, 0, 0, dpr)
+  }
+
+  // Fast path: use overlay_png_base64 (already in memory, no disk I/O)
+  if (pred.overlay_png_base64) {
+    const img = new Image()
+    img.onload = () => drawLoadedImage(img)
+    img.onerror = () => {
+      // If base64 decoding fails, fall back to file path
+      loadImageFromFile()
+    }
+    img.src = 'data:image/png;base64,' + pred.overlay_png_base64
+    return
+  }
+
+  // Slow path: read image from file system
+  function loadImageFromFile() {
+    const imagePath = pred.image_path
+    if (!imagePath) { drawFallbackGray(); return }
+
+    const img = new Image()
+    readBinaryFile(imagePath)
+      .then((data) => {
+        const ext = imagePath.toLowerCase().split('.').pop()
+        const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg'
+        const blob = new Blob([data], { type: mimeType })
+        img.src = URL.createObjectURL(blob)
+      })
+      .catch(() => drawFallbackGray())
+
+    img.onload = () => drawLoadedImage(img)
+    img.onerror = () => drawFallbackGray()
+  }
+
+  loadImageFromFile()
 }
 
 function drawKeypointsOnCanvas(
@@ -989,13 +924,6 @@ function drawKeypointsOnCanvas(
   const displayProfile = profiles.value.find(p => p.id === profileId)
   const displayKeypoints = displayProfile?.selected_keypoints ? new Set(displayProfile.selected_keypoints) : selectedKeypoints.value
 
-  // Debug logging
-  console.log('[Canvas Draw] Profile ID:', profileId)
-  console.log('[Canvas Draw] Display Profile:', displayProfile)
-  console.log('[Canvas Draw] Selected Keypoints:', displayProfile?.selected_keypoints || Array.from(selectedKeypoints.value))
-  console.log('[Canvas Draw] Display Keypoints Set:', Array.from(displayKeypoints))
-  console.log('[Canvas Draw] Total keypoints to check:', keypoints.length)
-
   const maxPoints = Math.min(keypoints.length, scores.length)
   let drawnCount = 0
   
@@ -1022,11 +950,6 @@ function drawKeypointsOnCanvas(
     const canvasAvg = (canvas.width + canvas.height) / (2 * dpr)
     const baseSize = Math.max(3, Math.min(10, canvasAvg / 100))
     
-    // Debug logging for first keypoint
-    if (i === 0) {
-      console.log(`[Keypoint Debug] Canvas: ${canvas.width}x${canvas.height}, DPR: ${dpr}, Avg: ${canvasAvg}, BaseSize: ${baseSize}, Score: ${score}`)
-    }
-    
     // Use pure red color to match exported images
     const color = 'rgb(255, 0, 0)'  // Pure red, same as backend
     
@@ -1052,8 +975,6 @@ function drawKeypointsOnCanvas(
     // Reset shadow
     ctx.shadowBlur = 0
   }
-
-  console.log('[Canvas Draw] Drew', drawnCount, 'out of', maxPoints, 'keypoints')
 
   // Draw confidence info
   if (scores.length > 0) {
@@ -1209,7 +1130,6 @@ async function onSetupComplete() {
   // Load config with fallback to defaults
   try {
     const config = await loadConfig()
-    console.log('[Init] Loaded config after setup:', config)
     isDarkMode.value = config.darkMode
     profiles.value = config.profiles.map(p => {
       // Ensure we have valid selected keypoints - check both fields and ensure not empty
@@ -1226,8 +1146,6 @@ async function onSetupComplete() {
         enabled: p.enabled !== undefined ? p.enabled : true,
       }
     })
-    
-    console.log('[Init] Profiles after mapping:', profiles.value)
     
     // Ensure at least one profile exists
     if (profiles.value.length === 0) {
@@ -1247,9 +1165,6 @@ async function onSetupComplete() {
     } else {
       activeProfileId.value = config.activeProfileId
     }
-    
-    // Keep profile filter as ALL PROFILES (empty string) by default
-    // This shows all images from all profiles
 
     // Load active profile's keypoints
     const activeProfile = profiles.value.find(p => p.id === activeProfileId.value)
@@ -1310,7 +1225,6 @@ onMounted(async () => {
     // Load config with fallback to defaults
     try {
       const config = await loadConfig()
-      console.log('[Init] Loaded config:', config)
       isDarkMode.value = config.darkMode
       profiles.value = config.profiles.map(p => {
         // Ensure we have valid selected keypoints - check both fields and ensure not empty
@@ -1320,8 +1234,6 @@ onMounted(async () => {
             ? p.selectedKeypoints 
             : Array.from({ length: 20 }, (_, i) => i)) // default to all 20 if missing
         
-        console.log('[Init] Profile:', p.name, 'selected_keypoints:', p.selected_keypoints, 'selectedKeypoints:', p.selectedKeypoints, 'final:', selected)
-        
         return {
           ...p,
           selected_keypoints: selected,
@@ -1329,8 +1241,6 @@ onMounted(async () => {
           enabled: p.enabled !== undefined ? p.enabled : true,
         }
       })
-      
-      console.log('[Init] Profiles after mapping:', profiles.value)
       
       // Ensure at least one profile exists
       if (profiles.value.length === 0) {

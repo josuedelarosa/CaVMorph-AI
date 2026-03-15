@@ -150,6 +150,17 @@ fn get_resource_dir() -> Option<PathBuf> {
     None
 }
 
+/// Strip the Windows extended-length path prefix (\\?\) that Tauri's
+/// resolve_resource() adds. Python and other tools can't handle it.
+fn strip_unc_prefix(p: &Path) -> PathBuf {
+    let s = p.to_string_lossy();
+    if s.starts_with(r"\\?\") {
+        PathBuf::from(&s[4..])
+    } else {
+        p.to_path_buf()
+    }
+}
+
 fn append_launcher_log(message: &str) {
     let logs_dir = get_app_data_dir().join("logs");
     let _ = fs::create_dir_all(&logs_dir);
@@ -165,8 +176,48 @@ fn append_launcher_log(message: &str) {
     }
 }
 
-/// Check if setup is complete (ONNX runtime + model + Python with packages)
+fn candidate_resource_roots() -> Vec<PathBuf> {
+    let mut roots: Vec<PathBuf> = Vec::new();
+
+    let mut push_unique = |p: PathBuf| {
+        if p.exists() && !roots.iter().any(|r| r == &p) {
+            roots.push(p);
+        }
+    };
+
+    if let Some(rd) = get_resource_dir() {
+        push_unique(rd);
+    }
+
+    if let Ok(exe) = env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            push_unique(parent.to_path_buf());
+            push_unique(parent.join("resources"));
+            push_unique(parent.join("_up_"));
+            push_unique(parent.join("_up_").join("_up_"));
+        }
+    }
+
+    eprintln!("[candidate_resource_roots] {} roots: {:?}", roots.len(), roots);
+    roots
+}
+
+/// Fast check: setup is complete if the config marker exists AND the runtime
+/// is available. Avoids slow Python subprocess probes on every launch.
 fn is_setup_complete() -> bool {
+    let app_data = get_app_data_dir();
+    let config_marker = app_data.join("config.json");
+    let venv_marker = app_data.join("venv");
+
+    // Fast path: config.json written by setup_onnx_runtime.py + venv exists
+    if config_marker.exists() && venv_marker.exists() {
+        if is_onnx_runtime_available().is_some() {
+            eprintln!("[is_setup_complete] fast path: config.json + venv + runtime all present");
+            return true;
+        }
+    }
+
+    // Slow fallback: actually probe Python packages
     if let Some((_runtime_dir, model_dir)) = is_onnx_runtime_available() {
         for python_path in iter_python_candidates() {
             let check_script = r#"
@@ -278,15 +329,17 @@ fn resolve_model_dir() -> Option<PathBuf> {
         }
     }
 
-    if let Some(resource_dir) = get_resource_dir() {
-        let bundled_models = resource_dir.join("models").join("cavfish_v1");
-        if has_model(&bundled_models) {
-            return Some(bundled_models);
-        }
+    for root in candidate_resource_roots() {
+        let candidates = [
+            root.join("models").join("cavfish_v1"),
+            root.join("_up_").join("models").join("cavfish_v1"),
+            root.join("_up_").join("_up_").join("models").join("cavfish_v1"),
+        ];
 
-        let nested_models = resource_dir.join("_up_").join("_up_").join("models").join("cavfish_v1");
-        if has_model(&nested_models) {
-            return Some(nested_models);
+        for cand in candidates {
+            if has_model(&cand) {
+                return Some(cand);
+            }
         }
     }
 
@@ -344,37 +397,73 @@ fn is_onnx_runtime_available() -> Option<(PathBuf, PathBuf)> {
     Some((runtime_dir, model_dir))
 }
 
-/// Resolve inference_runtime directory
+/// Resolve inference_runtime directory.
+/// The directory MUST contain runtime_server.py to be accepted.
 fn resolve_inference_runtime_dir() -> Option<PathBuf> {
+    let has_server = |dir: &Path| -> bool {
+        dir.join("runtime_server.py").exists()
+    };
+
+    let mut probed: Vec<String> = Vec::new();
+
     let app_data_runtime = get_app_data_dir().join("inference_runtime");
-    if app_data_runtime.exists() {
+    probed.push(format!("{} exists={} server={}", app_data_runtime.display(), app_data_runtime.exists(), has_server(&app_data_runtime)));
+    if has_server(&app_data_runtime) {
+        append_launcher_log(&format!("resolve_inference_runtime_dir: found in app_data {:?}", app_data_runtime));
         return Some(app_data_runtime);
     }
 
-    if let Some(resource_dir) = get_resource_dir() {
-        let bundled_runtime = resource_dir.join("inference_runtime");
-        if bundled_runtime.exists() {
-            return Some(bundled_runtime);
-        }
-
-        // Tauri rewrites ../../ → _up_/_up_/
-        let nested_runtime = resource_dir.join("_up_").join("_up_").join("inference_runtime");
-        if nested_runtime.exists() {
-            return Some(nested_runtime);
+    for root in candidate_resource_roots() {
+        let candidates = [
+            root.join("inference_runtime"),
+            root.join("_up_").join("inference_runtime"),
+            root.join("_up_").join("_up_").join("inference_runtime"),
+        ];
+        for cand in candidates {
+            probed.push(format!("{} exists={} server={}", cand.display(), cand.exists(), has_server(&cand)));
+            if has_server(&cand) {
+                append_launcher_log(&format!("resolve_inference_runtime_dir: found at {:?}", cand));
+                return Some(cand);
+            }
         }
     }
 
     if let Ok(cwd) = env::current_dir() {
-        let dev_runtime = cwd.join("inference_runtime");
-        if dev_runtime.exists() {
-            return Some(dev_runtime);
-        }
-        let parent_runtime = cwd.join("..").join("inference_runtime");
-        if parent_runtime.exists() {
-            return Some(parent_runtime);
+        let dev_candidates = [
+            cwd.join("inference_runtime"),
+            cwd.join("..").join("inference_runtime"),
+            cwd.join("..").join("..").join("inference_runtime"),
+        ];
+        for cand in dev_candidates {
+            probed.push(format!("{} exists={} server={}", cand.display(), cand.exists(), has_server(&cand)));
+            if has_server(&cand) {
+                append_launcher_log(&format!("resolve_inference_runtime_dir: found via cwd at {:?}", cand));
+                return Some(cand);
+            }
         }
     }
 
+    // Last resort: check common workspace-relative locations from exe dir
+    if let Ok(exe) = env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            let workspace_candidates = [
+                parent.join("cavfish-inference").join("inference_runtime"),
+                parent.join("..").join("cavfish-inference").join("inference_runtime"),
+            ];
+            for cand in workspace_candidates {
+                probed.push(format!("{} exists={} server={}", cand.display(), cand.exists(), has_server(&cand)));
+                if has_server(&cand) {
+                    append_launcher_log(&format!("resolve_inference_runtime_dir: found in workspace {:?}", cand));
+                    return Some(cand);
+                }
+            }
+        }
+    }
+
+    append_launcher_log(&format!(
+        "resolve_inference_runtime_dir: NOT FOUND. Probed: {}",
+        probed.join(" | ")
+    ));
     None
 }
 
@@ -407,11 +496,27 @@ fn find_runtime_python() -> Option<PathBuf> {
 
 /// Spawn the ONNX inference runtime backend server.
 fn spawn_backend(port: u16) -> Result<(Child, String), String> {
-    let (runtime_dir, model_dir) = is_onnx_runtime_available()
-        .ok_or_else(|| "ONNX runtime not available (model or inference_runtime missing)".to_string())?;
+    let model_dir = resolve_model_dir()
+        .ok_or_else(|| "model directory missing (model.onnx not found)".to_string())?;
+    if !model_dir.join("model.onnx").exists() || !model_dir.join("model_metadata.json").exists() {
+        return Err(format!(
+            "model files missing in {} (need model.onnx and model_metadata.json)",
+            model_dir.display()
+        ));
+    }
+
+    let runtime_dir = resolve_inference_runtime_dir()
+        .ok_or_else(|| "inference_runtime directory missing from app resources".to_string())?;
+    if !runtime_dir.join("runtime_server.py").exists() {
+        return Err(format!(
+            "runtime_server.py missing in {}",
+            runtime_dir.display()
+        ));
+    }
 
     let python_path = find_runtime_python()
         .ok_or_else(|| "No Python interpreter found with required packages".to_string())?;
+    let python_path = strip_unc_prefix(&python_path);
 
     eprintln!("[spawn_backend] Python: {:?}", python_path);
     eprintln!("[spawn_backend] Runtime dir: {:?}", runtime_dir);
@@ -422,7 +527,8 @@ fn spawn_backend(port: u16) -> Result<(Child, String), String> {
     let _ = fs::create_dir_all(&logs_dir);
     let backend_log_path = logs_dir.join("backend.log");
 
-    let runtime_parent = runtime_dir.parent().unwrap_or(&runtime_dir);
+    let runtime_parent = strip_unc_prefix(runtime_dir.parent().unwrap_or(&runtime_dir));
+    let model_dir_clean = strip_unc_prefix(&model_dir);
     let startup_script = format!(
         r#"
 import sys, os
@@ -436,7 +542,7 @@ import uvicorn
 uvicorn.run(app, host='127.0.0.1', port={}, log_level='info')
 "#,
         runtime_parent.to_string_lossy().replace('\\', "\\\\").replace('\'', "\\'"),
-        model_dir.to_string_lossy().replace('\\', "\\\\").replace('\'', "\\'"),
+        model_dir_clean.to_string_lossy().replace('\\', "\\\\").replace('\'', "\\'"),
         port,
         port,
     );
@@ -447,7 +553,7 @@ uvicorn.run(app, host='127.0.0.1', port={}, log_level='info')
     cmd.arg(&startup_script);
     cmd.env("FISH_PORT", port.to_string());
     cmd.env("FISH_DEVICE", "cpu");
-    cmd.env("FISH_MODEL_DIR", model_dir.to_string_lossy().to_string());
+    cmd.env("FISH_MODEL_DIR", model_dir_clean.to_string_lossy().to_string());
     cmd.env("KMP_DUPLICATE_LIB_OK", "TRUE");
     cmd.env("PYTHONDONTWRITEBYTECODE", "1");
 
@@ -563,7 +669,8 @@ fn check_setup_needed() -> bool {
 #[tauri::command]
 fn check_python_installed() -> Result<String, String> {
     if let Some(p) = find_runtime_python() {
-        return Ok(p.to_string_lossy().to_string());
+        let clean = strip_unc_prefix(&p);
+        return Ok(clean.to_string_lossy().to_string());
     }
     Err("Python not found. Please install Python 3.9 or later.".to_string())
 }
@@ -596,8 +703,41 @@ fn check_model_available() -> Result<String, String> {
 }
 
 #[tauri::command]
+fn check_runtime_available(app: AppHandle) -> Result<String, String> {
+    append_launcher_log("check_runtime_available: invoked");
+
+    // Primary: use resolve_inference_runtime_dir (checks many paths)
+    if let Some(runtime_dir) = resolve_inference_runtime_dir() {
+        let server = runtime_dir.join("runtime_server.py");
+        if server.exists() {
+            append_launcher_log(&format!("check_runtime_available: found at {}", runtime_dir.display()));
+            return Ok(runtime_dir.to_string_lossy().to_string());
+        }
+        append_launcher_log(&format!("check_runtime_available: dir found but runtime_server.py missing: {}", runtime_dir.display()));
+    }
+
+    // Fallback: try Tauri resolve_resource for known resource paths
+    let resource_paths = [
+        "_up_/_up_/inference_runtime",
+        "inference_runtime",
+        "_up_/inference_runtime",
+    ];
+    for rp in &resource_paths {
+        if let Some(resolved) = app.path_resolver().resolve_resource(rp) {
+            let server = resolved.join("runtime_server.py");
+            append_launcher_log(&format!("check_runtime_available: resolve_resource({}) => {} server={}", rp, resolved.display(), server.exists()));
+            if server.exists() {
+                return Ok(resolved.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    Err("inference_runtime directory not found (runtime_server.py missing in all candidate paths)".to_string())
+}
+
+#[tauri::command]
 async fn run_first_time_setup(app: AppHandle) -> Result<(), String> {
-    let setup_script = if cfg!(debug_assertions) {
+    let setup_script_raw = if cfg!(debug_assertions) {
         PathBuf::from("desktop/setup_onnx_runtime.py")
     } else {
         app.path_resolver()
@@ -605,21 +745,35 @@ async fn run_first_time_setup(app: AppHandle) -> Result<(), String> {
             .or_else(|| app.path_resolver().resolve_resource("_up_/setup_onnx_runtime.py"))
             .ok_or_else(|| "Setup script not found in resources".to_string())?
     };
+    // Strip the \\?\ prefix that Tauri adds on Windows — Python can't open it.
+    let setup_script = strip_unc_prefix(&setup_script_raw);
 
-    let python = find_runtime_python()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_else(|| default_python_command().to_string());
+    let python_raw = find_runtime_python()
+        .unwrap_or_else(|| PathBuf::from(default_python_command()));
+    let python = strip_unc_prefix(&python_raw);
 
     let app_data_dir = get_app_data_dir();
     let model_dir = resolve_model_dir().unwrap_or_else(|| app_data_dir.join("models").join("cavfish_v1"));
+    let backend_dir = resolve_inference_runtime_dir()
+        .and_then(|d| d.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| app_data_dir.clone());
 
-    eprintln!("[run_first_time_setup] script={:?}  python={}  model_dir={:?}", setup_script, python, model_dir);
+    eprintln!("[run_first_time_setup] script={:?}  python={:?}  model_dir={:?}  backend_dir={:?}", setup_script, python, model_dir, backend_dir);
+    append_launcher_log(&format!(
+        "run_first_time_setup: script={} python={} app_data={} model_dir={} backend_dir={}",
+        setup_script.display(),
+        python.display(),
+        app_data_dir.display(),
+        model_dir.display(),
+        backend_dir.display()
+    ));
 
     let mut cmd = Command::new(&python);
     apply_windows_no_window(&mut cmd);
     cmd.arg(&setup_script);
     cmd.arg("--app-data-dir").arg(&app_data_dir);
     cmd.arg("--model-dir").arg(&model_dir);
+    cmd.arg("--backend-dir").arg(&backend_dir);
 
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
@@ -671,19 +825,48 @@ async fn run_first_time_setup(app: AppHandle) -> Result<(), String> {
         }
     });
 
+    let stderr_capture = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+    let stderr_capture_clone = stderr_capture.clone();
     thread::spawn(move || {
         let reader = BufReader::new(stderr);
         for line in reader.lines().flatten() {
             eprintln!("[setup stderr] {}", line);
+            if let Ok(mut s) = stderr_capture_clone.lock() {
+                s.push_str(&line);
+                s.push('\n');
+            }
         }
     });
 
     let status = child.wait().map_err(|e| format!("Setup process error: {}", e))?;
 
     if status.success() {
+        append_launcher_log("run_first_time_setup: completed successfully");
         Ok(())
     } else {
-        Err(format!("Setup failed with exit code: {:?}", status.code()))
+        let stderr_tail = stderr_capture
+            .lock()
+            .map(|s| {
+                let text = s.trim();
+                if text.len() > 600 {
+                    text[text.len() - 600..].to_string()
+                } else {
+                    text.to_string()
+                }
+            })
+            .unwrap_or_else(|_| String::new());
+
+        append_launcher_log(&format!(
+            "run_first_time_setup: failed exit={:?} stderr_tail={} ",
+            status.code(),
+            stderr_tail.replace('\n', " | ")
+        ));
+
+        if stderr_tail.is_empty() {
+            Err(format!("Setup failed with exit code: {:?}", status.code()))
+        } else {
+            Err(format!("Setup failed with exit code: {:?}. {}", status.code(), stderr_tail))
+        }
     }
 }
 
@@ -763,12 +946,26 @@ fn main() {
             check_python_installed,
             check_onnx_dependencies,
             check_model_available,
+            check_runtime_available,
             run_first_time_setup,
             open_setup_logs,
             finish_setup_and_start,
             get_app_data_path
         ])
         .setup(|app| {
+            // Log startup diagnostics
+            if let Ok(exe) = env::current_exe() {
+                append_launcher_log(&format!("startup: exe={}", exe.display()));
+            }
+            if let Some(rd) = get_resource_dir() {
+                append_launcher_log(&format!("startup: resource_dir={}", rd.display()));
+            }
+            if let Ok(cwd) = env::current_dir() {
+                append_launcher_log(&format!("startup: cwd={}", cwd.display()));
+            }
+            let roots = candidate_resource_roots();
+            append_launcher_log(&format!("startup: candidate_roots={:?}", roots.iter().map(|r| r.display().to_string()).collect::<Vec<_>>()));
+
             let setup_needed = !is_setup_complete();
 
             if !setup_needed {

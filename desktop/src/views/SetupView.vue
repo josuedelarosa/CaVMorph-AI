@@ -33,10 +33,16 @@
             <span v-if="modelDir">Model files found</span>
             <span v-else>Model files not found</span>
           </div>
+          <!-- Runtime scripts -->
+          <div class="check-item" :class="runtimeDir ? 'success' : 'warning'">
+            <span class="check-icon">{{ runtimeDir ? '✓' : '⚠' }}</span>
+            <span v-if="runtimeDir">Inference runtime found</span>
+            <span v-else>Inference runtime files missing</span>
+          </div>
         </div>
 
         <!-- If everything is ready, offer to start immediately -->
-        <div v-if="pythonPath && depsInstalled && modelDir" class="all-ready">
+        <div v-if="pythonPath && depsInstalled && modelDir && runtimeDir" class="all-ready">
           <p class="ready-message">✅ Everything looks good!</p>
           <button @click="startApp" class="btn-primary" :disabled="launchInProgress">
             {{ launchInProgress ? 'Starting…' : 'Start Application' }}
@@ -44,9 +50,23 @@
         </div>
 
         <!-- If deps or venv are missing but Python + model OK -->
-        <div v-else-if="pythonPath && modelDir" class="needs-install">
+        <div v-else-if="pythonPath && modelDir && runtimeDir" class="needs-install">
           <p class="info-message">Some dependencies need to be installed. This usually takes 1–2 minutes.</p>
           <button @click="runSetup" class="btn-primary">Install Dependencies</button>
+        </div>
+
+        <!-- Runtime missing -->
+        <div v-else-if="pythonPath && modelDir && !runtimeDir" class="needs-model">
+          <div class="help-text">
+            <p><strong>Inference runtime files are missing from this installation.</strong>
+              This is not a Python dependency issue. Reinstall PhenoAI using the latest installer package,
+              then click Check Again.
+              <br>If this persists, click "View Full Logs" and share launcher.log.</p>
+          </div>
+          <div class="actions" style="margin-top:16px">
+            <button @click="checkEnvironment" class="btn-secondary">Check Again</button>
+            <button @click="openLogs" class="btn-secondary">View Full Logs</button>
+          </div>
         </div>
 
         <!-- Python missing -->
@@ -164,6 +184,7 @@ const launchInProgress = ref(false)
 const pythonPath = ref<string>('')
 const depsInstalled = ref(false)
 const modelDir = ref<string>('')
+const runtimeDir = ref<string>('')
 
 const progressPercent = computed(() =>
   Math.round((currentStep.value / steps.value.length) * 100)
@@ -190,6 +211,11 @@ const checkEnvironment = async () => {
     const dir = await invoke<string>('check_model_available')
     modelDir.value = dir
   } catch { modelDir.value = '' }
+
+  try {
+    const dir = await invoke<string>('check_runtime_available')
+    runtimeDir.value = dir
+  } catch { runtimeDir.value = '' }
 }
 
 // ----- Run the lightweight ONNX setup -----
