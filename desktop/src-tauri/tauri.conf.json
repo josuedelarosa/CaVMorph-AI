@@ -53,11 +53,12 @@
       "targets": "all",
       "externalBin": [],
       "resources": [
-        "../setup_first_run.py",
+        "../setup_onnx_runtime.py",
+        "../runtime/python",
+        "../../inference_runtime/**",
         "../../backend/**",
         "../../backend/*.py",
-        "../../models/cavfish_v1/*.json",
-        "../../models/cavfish_v1/*.py"
+        "../../models/cavfish_v1/**"
       ]
     },
     "security": {

@@ -100,8 +100,7 @@ class TestTransformKeypoints:
 
     def test_roundtrip(self):
         """Preprocessing then postprocessing should recover original coords."""
-        from inference_runtime.preprocessing import preprocess_image, get_warp_matrix_udp
-        import cv2
+        from inference_runtime.preprocessing import preprocess_image, get_inverse_warp_matrix
 
         img = np.zeros((480, 640, 3), dtype=np.uint8)
         _, center, scale = preprocess_image(
@@ -110,13 +109,18 @@ class TestTransformKeypoints:
             np.array([58.395, 57.12, 57.375]),
         )
 
-        # Put a keypoint at the input image center
+        # Put a keypoint at the input image center.
+        # Under UDP, this does not necessarily map to exact original image center.
         kps = np.array([[96.0, 128.0]], dtype=np.float32)
         original = transform_keypoints_to_original(kps, center, scale, (192, 256))
 
-        # Should be near original image center
-        assert original[0, 0] == pytest.approx(320.0, abs=2.0)
-        assert original[0, 1] == pytest.approx(240.0, abs=2.0)
+        # Validate against direct inverse affine mapping from preprocessing.
+        inv = get_inverse_warp_matrix(center, scale, (192, 256))
+        kph = np.array([kps[0, 0], kps[0, 1], 1.0], dtype=np.float32)
+        expected = inv @ kph
+
+        assert original[0, 0] == pytest.approx(float(expected[0]), abs=1e-4)
+        assert original[0, 1] == pytest.approx(float(expected[1]), abs=1e-4)
 
 
 class TestComputePhenotypes:

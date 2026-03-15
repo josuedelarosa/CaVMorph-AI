@@ -4,11 +4,21 @@ import type { PredictionResult, BatchResult, ModelInfo } from '../types'
 
 let backendUrl: string | null = null
 
+export function resetBackendUrl() {
+  backendUrl = null
+}
+
 export async function getBackendUrl(): Promise<string> {
   if (!backendUrl) {
     try {
       // Try to get from Tauri command (production)
-      backendUrl = await invoke<string>('get_backend_url')
+      const url = await invoke<string>('get_backend_url')
+      // Only cache non-empty URLs
+      if (url && url.length > 0) {
+        backendUrl = url
+      } else {
+        return 'http://127.0.0.1:8008'
+      }
     } catch (e) {
       // Fall back to localhost in development
       console.warn('Using fallback backend URL for development')

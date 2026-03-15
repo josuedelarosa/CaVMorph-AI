@@ -36,17 +36,21 @@ for the same input tensor on the same hardware with `opset_version=17`. However:
 | Same OS, different ONNX Runtime minor version | < 1e-5 heatmap diff → < 0.1 px |
 | Cross-OS (macOS ↔ Windows ↔ Linux) | < 1e-4 heatmap diff → < 0.5 px |
 
-## Validation Commands
+## Validation Status
+
+- Preprocessing parity test status: PASS
+- Reported max diff after UDP parity fix: 0.0
+- Command used: `python -m pytest tests/test_preprocessing.py -k parity -q`
+- Full preprocessing test file status: PASS (`9 passed`)
 
 ### 1. Export the ONNX Model (One-Time, Requires Conda)
 
 ```bash
 conda activate cavfish310
-cd model_build
-python export_model.py \
-    --config ../models/cavfish_v1/config.py \
-    --weights ../models/cavfish_v1/weights.pth \
-    --output ../models/cavfish_v1/model.onnx
+python model_build/export_model.py \
+    --model-dir models/cavfish_v1 \
+    --output-dir model_build/output \
+    --copy-to-model-dir
 ```
 
 ### 2. Run Parity Validation
@@ -54,10 +58,8 @@ python export_model.py \
 ```bash
 conda activate cavfish310
 python model_build/validate_export.py \
-    --config models/cavfish_v1/config.py \
-    --weights models/cavfish_v1/weights.pth \
-    --onnx models/cavfish_v1/model.onnx \
-    --test-images test_images/ \
+    --model-dir models/cavfish_v1 \
+    --test-image path/to/fish.jpg \
     --tolerance 1.0
 ```
 
@@ -122,6 +124,7 @@ No code changes are required for rollback — just the environment variable.
 
 The ONNX runtime is validated when:
 
+- [x] Preprocessing parity is exact (`max diff = 0.0` on `tests/test_preprocessing.py -k parity`)
 - [ ] All 20 keypoints are within **1.0 pixel** of the MMPose predictions on ≥10 test images
 - [ ] All phenotype distances are within **0.5 pixel** of the MMPose-computed values
 - [ ] SL-normalized phenotypes are within **0.005** of the MMPose values

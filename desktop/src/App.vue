@@ -318,7 +318,8 @@ import {
   getModelInfo, 
   exportCSV, 
   exportJSON, 
-  exportAnnotatedImages 
+  exportAnnotatedImages,
+  resetBackendUrl 
 } from './utils/api'
 import SettingsModal from './components/SettingsModal.vue'
 import SetupView from './views/SetupView.vue'
@@ -1070,6 +1071,9 @@ async function initializeBackend() {
   
   const attemptConnection = async () => {
     try {
+      // Force backend startup and URL registration before the first HTTP call.
+      await invoke<string>('ensure_backend_running')
+
       // Show status in UI
       if (retries > 0) {
         errorMessage.value = `Connecting to backend... (attempt ${retries}/${maxRetries})`
@@ -1271,6 +1275,7 @@ async function onSetupComplete() {
   }
   
   // Re-initialize the app after setup
+  resetBackendUrl()
   initializeBackend()
   
   // Set state to idle so UI shows
