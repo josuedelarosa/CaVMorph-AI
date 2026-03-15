@@ -84,6 +84,24 @@ def _bbox_xyxy_to_center_scale(
     return center, scale
 
 
+def _fix_aspect_ratio(scale: np.ndarray, aspect_ratio: float) -> np.ndarray:
+    """Match MMPose TopdownAffine bbox aspect-ratio correction.
+
+    Args:
+        scale: [w, h] bbox scale in pixels.
+        aspect_ratio: target w/h ratio (e.g. 192/256).
+
+    Returns:
+        Corrected [w, h] scale that matches target aspect ratio.
+    """
+    w, h = float(scale[0]), float(scale[1])
+    if w > h * aspect_ratio:
+        h = w / aspect_ratio
+    elif w < h * aspect_ratio:
+        w = h * aspect_ratio
+    return np.array([w, h], dtype=np.float32)
+
+
 def preprocess_image(
     image_bgr: np.ndarray,
     input_size: Tuple[int, int],
@@ -116,6 +134,9 @@ def preprocess_image(
     center, scale = _bbox_xyxy_to_center_scale(bbox, padding)
 
     out_w, out_h = input_size  # (192, 256)
+
+    # TopdownAffine fixes bbox scale to the model input aspect ratio before warping.
+    scale = _fix_aspect_ratio(scale, aspect_ratio=float(out_w) / float(out_h))
 
     # TopdownAffine with UDP
     warp_mat = get_warp_matrix_udp(center, scale, rot=0.0, output_size=(out_w, out_h))
