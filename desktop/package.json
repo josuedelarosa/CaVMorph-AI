@@ -7,9 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "tauri": "tauri",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri": "node ./scripts/tauri-wrapper.mjs",
+    "tauri:dev": "node ./scripts/tauri-wrapper.mjs dev",
+    "tauri:build": "node ./scripts/tauri-wrapper.mjs build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^1.6.3",

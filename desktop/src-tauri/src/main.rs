@@ -21,10 +21,10 @@ use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-fn apply_windows_no_window(cmd: &mut Command) {
+fn apply_windows_no_window(_cmd: &mut Command) {
     #[cfg(target_os = "windows")]
     {
-        cmd.creation_flags(CREATE_NO_WINDOW);
+        _cmd.creation_flags(CREATE_NO_WINDOW);
     }
 }
 
@@ -740,10 +740,38 @@ async fn run_first_time_setup(app: AppHandle) -> Result<(), String> {
     let setup_script_raw = if cfg!(debug_assertions) {
         PathBuf::from("desktop/setup_onnx_runtime.py")
     } else {
-        app.path_resolver()
-            .resolve_resource("setup_onnx_runtime.py")
-            .or_else(|| app.path_resolver().resolve_resource("_up_/setup_onnx_runtime.py"))
-            .ok_or_else(|| "Setup script not found in resources".to_string())?
+        // Tauri v1 resolve_resource() always returns Some even when the file
+        // doesn't exist on disk, so we must add .exists() checks ourselves.
+        let resolve_candidates = [
+            "_up_/setup_onnx_runtime.py",   // matches ../setup_onnx_runtime.py resource decl
+            "setup_onnx_runtime.py",
+        ];
+        let mut found: Option<PathBuf> = None;
+        for key in &resolve_candidates {
+            if let Some(p) = app.path_resolver().resolve_resource(key) {
+                if p.exists() {
+                    found = Some(p);
+                    break;
+                }
+            }
+        }
+        // Fallback: filesystem search through known resource roots
+        if found.is_none() {
+            for root in candidate_resource_roots() {
+                let candidates = [
+                    root.join("_up_").join("setup_onnx_runtime.py"),
+                    root.join("setup_onnx_runtime.py"),
+                ];
+                for cand in candidates {
+                    if cand.exists() {
+                        found = Some(cand);
+                        break;
+                    }
+                }
+                if found.is_some() { break; }
+            }
+        }
+        found.ok_or_else(|| "Setup script (setup_onnx_runtime.py) not found in app resources".to_string())?
     };
     // Strip the \\?\ prefix that Tauri adds on Windows — Python can't open it.
     let setup_script = strip_unc_prefix(&setup_script_raw);

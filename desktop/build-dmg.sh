@@ -6,7 +6,7 @@ set -e
 cd "$(dirname "$0")"
 
 echo "Building Tauri app..."
-npm run tauri build || {
+npm run tauri:build || {
     echo "Build succeeded but DMG creation failed, creating DMG manually..."
 }
 
@@ -14,7 +14,7 @@ echo ""
 echo "🧹 Cleaning Python bytecode from app bundle..."
 ./clean-python-cache.sh
 
-DMG_DIR="src-tauri/target/release/bundle/macos"
+DMG_DIR="src-tauri/target/release/bundle/dmg"
 DMG_FILE="PhenoAI_0.1.0_aarch64.dmg"
 
 if [[ ! -f "$DMG_DIR/$DMG_FILE" ]]; then
