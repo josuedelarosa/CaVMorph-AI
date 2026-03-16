@@ -161,8 +161,10 @@ html, body {
 .left-panel {
   width: var(--left-panel-w);
   min-width: var(--left-panel-w);
+  max-width: var(--left-panel-w);
   background: var(--bg-surface);
   border-right: 1px solid var(--border-default);
+  overflow-x: hidden;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -202,6 +204,13 @@ html, body {
   padding: var(--sp-8) var(--sp-12);
   font-size: var(--fs-sm);
   border-bottom: 1px solid transparent;
+  min-width: 0;
+}
+.panel-alert span {
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-all;
+  flex: 1;
 }
 .panel-alert-error {
   background: #FEF2F2;
