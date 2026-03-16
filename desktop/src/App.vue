@@ -180,7 +180,7 @@
         <div v-if="predictions.length" class="workspace-content">
 
           <!-- Viewer row: thumbnail strip + canvas -->
-          <div class="viewer-row">
+          <div class="viewer-row" :style="{ flex: '0 0 ' + viewerHeight + 'px' }">
 
             <!-- Thumbnail strip -->
             <div class="thumb-strip">
@@ -228,6 +228,9 @@
 
           </div><!-- /.viewer-row -->
 
+          <!-- Drag handle to resize viewer height -->
+          <div class="row-resizer" @mousedown.prevent="startRowResize($event)" title="Drag to resize"></div>
+
           <!-- Measurements table -->
           <div class="measurements-panel">
             <div class="measurements-bar">
@@ -243,7 +246,12 @@
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th class="th-specimen">Specimen</th>
+                    <th class="th-specimen" :style="{ width: specimenColWidth + 'px', minWidth: specimenColWidth + 'px' }">
+                      <div class="col-header-inner">
+                        Specimen
+                        <div class="col-resize-handle" @mousedown.stop.prevent="startColResize($event)"></div>
+                      </div>
+                    </th>
                     <th class="th-num">Landmarks</th>
                     <th class="th-num">Confidence</th>
                     <th
@@ -260,7 +268,7 @@
                     :class="{ 'row-selected': selectedPredictionIdx === idx }"
                     @click="selectPredictionFromFiltered(idx, pred)"
                   >
-                    <td class="td-specimen">{{ getFilename(pred.image_path) }}</td>
+                    <td class="td-specimen" :style="{ width: specimenColWidth + 'px', maxWidth: specimenColWidth + 'px' }">{{ getFilename(pred.image_path) }}</td>
                     <td class="td-num">{{ getKeypointCount(pred) }}/20</td>
                     <td class="td-num">{{ getAvgConfidence(pred) }}%</td>
                     <td
@@ -400,6 +408,10 @@ const activeProfileId = ref('default')
 const selectedKeypoints = ref<Set<number>>(new Set())
 const selectedProfileFilter = ref('')
 const showWelcome = ref(false)
+
+// Resizable panels
+const viewerHeight = ref(460)      // px — draggable row height
+const specimenColWidth = ref(200)  // px — draggable specimen column width
 
 // Intercept console.log/error/warn for debug panel
 const originalLog = console.log
@@ -1255,6 +1267,48 @@ async function onSetupComplete() {
 
 function onSetupError(message: string) {
   errorMessage.value = `Setup failed: ${message}`
+}
+
+// ── Resize handlers ──────────────────────────────────────────────────────────
+
+/** Drag the horizontal divider between the viewer row and the measurements panel */
+function startRowResize(e: MouseEvent) {
+  const startY = e.clientY
+  const startH = viewerHeight.value
+  const onMove = (ev: MouseEvent) => {
+    const dy = ev.clientY - startY
+    viewerHeight.value = Math.max(160, Math.min(startH + dy, window.innerHeight - 220))
+  }
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }
+  document.body.style.cursor = 'row-resize'
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
+
+/** Drag the right edge of the Specimen column header to resize it */
+function startColResize(e: MouseEvent) {
+  const startX = e.clientX
+  const startW = specimenColWidth.value
+  const onMove = (ev: MouseEvent) => {
+    const dx = ev.clientX - startX
+    specimenColWidth.value = Math.max(80, Math.min(startW + dx, 520))
+  }
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
 }
 
 onMounted(async () => {

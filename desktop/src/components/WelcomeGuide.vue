@@ -2,58 +2,73 @@
   <div v-if="show" class="welcome-overlay" @click.self="handleClose">
     <div class="welcome-modal">
       <button class="close-btn" @click="handleClose">&times;</button>
-      
-      <div class="welcome-header">
-        <h1>PhenoAI</h1>
-        <p class="subtitle">Phenotype analysis for fish morphometrics</p>
-      </div>
 
-      <div class="guide-content">
-        <div class="guide-section">
-          <h2>Supported Formats</h2>
-          <p>PhenoAI accepts the following image formats:</p>
-          <ul>
-            <li><strong>JPEG</strong> (.jpg, .jpeg)</li>
-            <li><strong>PNG</strong> (.png)</li>
-            <li><strong>BMP</strong> (.bmp)</li>
-            <li><strong>TIFF</strong> (.tif, .tiff)</li>
-          </ul>
-          <p class="tip">For best results, use high-resolution images with clear specimens.</p>
+      <!-- Two-column body -->
+      <div class="welcome-body">
+
+        <!-- Left column: brand + workflow + export -->
+        <div class="welcome-col welcome-col-left">
+          <div class="welcome-brand">
+            <svg class="brand-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <ellipse cx="12" cy="12" rx="9" ry="5.5"/>
+              <circle cx="8.5" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+              <path d="M21 12c-2-3-5-5.5-9-5.5" stroke-dasharray="2.5 1.5" stroke-linecap="round"/>
+            </svg>
+            <h1>PhenoAI</h1>
+            <p class="subtitle">Phenotype analysis for fish morphometrics</p>
+          </div>
+
+          <div class="col-section">
+            <h2>Workflow</h2>
+            <ol class="workflow-list">
+              <li>Select or create a <strong>Profile</strong> for your specimen type</li>
+              <li>Click <strong>Browse</strong> to choose a folder of images</li>
+              <li>Click <strong>Run Analysis</strong> to detect keypoints</li>
+              <li>Review results and measurements in the table</li>
+              <li>Export annotated images and phenotype data</li>
+            </ol>
+          </div>
+
+          <div class="col-section">
+            <h2>Export</h2>
+            <p>Results are saved to:</p>
+            <div class="path-box"><code>~/Documents/PhenoAI/</code></div>
+            <p>Each export includes annotated images, phenotype measurements, and profile metadata.</p>
+          </div>
         </div>
 
-        <div class="guide-section">
-          <h2>Profiles</h2>
-          <p><strong>Profiles</strong> group specimens by species or experiment type.</p>
-          <div class="explanation-box">
-            <p><strong>Each profile can have its own keypoint configuration.</strong></p>
-            <ul>
-              <li>The default profile uses 20 anatomical keypoints</li>
-              <li>Create custom profiles for specific species</li>
-              <li>Organize data by experiment, location, or population</li>
+        <!-- Divider -->
+        <div class="col-divider"></div>
+
+        <!-- Right column: formats + profiles -->
+        <div class="welcome-col welcome-col-right">
+          <div class="col-section">
+            <h2>Supported Formats</h2>
+            <p>PhenoAI accepts the following image formats:</p>
+            <ul class="format-list">
+              <li><span class="fmt-badge">JPEG</span>&nbsp;.jpg, .jpeg</li>
+              <li><span class="fmt-badge">PNG</span>&nbsp;.png</li>
+              <li><span class="fmt-badge">BMP</span>&nbsp;.bmp</li>
+              <li><span class="fmt-badge">TIFF</span>&nbsp;.tif, .tiff</li>
             </ul>
+            <p class="tip">For best results, use high-resolution images with clear specimens.</p>
+          </div>
+
+          <div class="col-section">
+            <h2>Profiles</h2>
+            <p><strong>Profiles</strong> group specimens by species or experiment type.</p>
+            <div class="info-box">
+              <ul>
+                <li>Each profile has its own keypoint configuration</li>
+                <li>The default profile uses 20 anatomical keypoints</li>
+                <li>Create custom profiles for specific species</li>
+                <li>Organize data by experiment, location, or population</li>
+              </ul>
+            </div>
           </div>
         </div>
 
-        <div class="guide-section">
-          <h2>Workflow</h2>
-          <ol class="quick-start-list">
-            <li>Select or create a <strong>Profile</strong> for your specimen type</li>
-            <li>Select a folder of images</li>
-            <li>Click <strong>Run Analysis</strong> to detect keypoints</li>
-            <li>Review results and measurements</li>
-            <li>Export annotated data</li>
-          </ol>
-        </div>
-
-        <div class="guide-section">
-          <h2>Export</h2>
-          <p>Results are saved to:</p>
-          <div class="path-box">
-            <code>~/Documents/PhenoAI/</code>
-          </div>
-          <p>Each export includes annotated images, phenotype measurements, and profile metadata.</p>
-        </div>
-      </div>
+      </div><!-- /.welcome-body -->
 
       <div class="welcome-footer">
         <label class="checkbox-label">
@@ -88,38 +103,40 @@ const handleClose = () => {
 </script>
 
 <style scoped>
+/* ── Overlay ──────────────────────────────────────────────── */
 .welcome-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.65);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
-  padding: 20px;
+  padding: 24px;
   backdrop-filter: blur(3px);
 }
 
+/* ── Modal shell ──────────────────────────────────────────── */
 .welcome-modal {
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  max-width: 640px;
-  max-height: 85vh;
-  overflow-y: auto;
+  width: 820px;
+  max-width: 96vw;
+  display: flex;
+  flex-direction: column;
   box-shadow: var(--shadow-overlay);
   position: relative;
   animation: fadeIn 0.15s ease-out;
+  overflow: hidden;            /* prevent any child scrolling */
 }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ── Close button ─────────────────────────────────────────── */
 .close-btn {
   position: absolute;
   top: 12px;
@@ -138,137 +155,233 @@ const handleClose = () => {
   transition: color 0.12s, background 0.12s;
   z-index: 10;
 }
-
 .close-btn:hover {
   color: var(--text-primary);
-  background: var(--bg-overlay);
+  background: var(--bg-canvas);
 }
 
-.welcome-header {
-  text-align: center;
-  padding: var(--sp-32) var(--sp-32) var(--sp-16);
+/* ── 2-column body ────────────────────────────────────────── */
+.welcome-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
 }
 
-.welcome-header h1 {
-  margin: 0 0 6px 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text-primary);
+.welcome-col {
+  flex: 1;
+  padding: 28px 28px 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.subtitle {
-  margin: 0;
-  font-size: var(--fs-sm);
-  color: var(--text-secondary);
+.col-divider {
+  width: 1px;
+  background: var(--border-muted);
+  margin: 20px 0;
 }
 
-.guide-content {
-  padding: var(--sp-16) var(--sp-32);
+/* ── Brand block ──────────────────────────────────────────── */
+.welcome-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
-.guide-section {
-  margin-bottom: var(--sp-24);
-}
-
-.guide-section:last-child {
-  margin-bottom: 0;
-}
-
-.guide-section h2 {
-  color: var(--text-primary);
-  font-size: var(--fs-md);
-  margin: 0 0 var(--sp-8) 0;
-  font-weight: 600;
-}
-
-.guide-section p {
-  color: var(--text-secondary);
-  line-height: 1.6;
-  margin: 0 0 var(--sp-8) 0;
-  font-size: var(--fs-sm);
-}
-
-.guide-section ul,
-.guide-section ol {
-  color: var(--text-secondary);
-  line-height: 1.7;
-  margin: var(--sp-8) 0;
-  padding-left: 20px;
-  font-size: var(--fs-sm);
-}
-
-.guide-section li {
+.brand-svg {
+  width: 28px;
+  height: 28px;
+  color: var(--accent-blue);
   margin-bottom: 4px;
 }
 
-.guide-section strong {
+.welcome-brand h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* ── Section blocks ───────────────────────────────────────── */
+.col-section h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.col-section p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 8px 0;
+  line-height: 1.55;
+}
+
+.col-section p:last-child { margin-bottom: 0; }
+
+.col-section strong {
   color: var(--text-primary);
   font-weight: 600;
 }
 
-.tip {
-  background: rgba(88, 166, 255, 0.08);
-  border-left: 3px solid var(--accent-blue);
-  padding: var(--sp-8) var(--sp-12);
-  border-radius: var(--radius-sm);
-  font-size: var(--fs-xs) !important;
-  color: var(--accent-blue) !important;
+/* ── Workflow list ────────────────────────────────────────── */
+.workflow-list {
+  list-style: none;
+  counter-reset: wf;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.explanation-box {
+.workflow-list li {
+  counter-increment: wf;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.workflow-list li::before {
+  content: counter(wf);
+  min-width: 20px;
+  height: 20px;
+  background: var(--accent-blue-bg);
+  color: var(--accent-blue);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ── Format list ──────────────────────────────────────────── */
+.format-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.format-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.fmt-badge {
+  display: inline-block;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-default);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  min-width: 42px;
+  text-align: center;
+}
+
+/* ── Info box (profiles) ──────────────────────────────────── */
+.info-box {
   background: var(--bg-canvas);
   border: 1px solid var(--border-muted);
   border-radius: var(--radius-md);
-  padding: var(--sp-12);
-  margin: var(--sp-8) 0;
+  padding: 10px 12px;
 }
 
-.explanation-box p {
-  margin: 0 0 var(--sp-4) 0;
+.info-box ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
-.explanation-box ul {
-  margin: var(--sp-4) 0 0 0;
+.info-box li {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding-left: 14px;
+  position: relative;
+  line-height: 1.5;
 }
 
+.info-box li::before {
+  content: '·';
+  position: absolute;
+  left: 4px;
+  color: var(--text-muted);
+}
+
+/* ── Path box ─────────────────────────────────────────────── */
 .path-box {
   background: var(--bg-canvas);
   border: 1px solid var(--border-muted);
-  color: var(--accent-green);
-  padding: var(--sp-8) var(--sp-12);
   border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  margin: 6px 0;
   font-family: var(--font-mono);
-  margin: var(--sp-8) 0;
 }
 
 .path-box code {
-  font-size: var(--fs-sm);
+  font-size: 12px;
+  color: var(--accent-green);
 }
 
-.quick-start-list {
-  padding-left: 20px;
+/* ── Tip block ────────────────────────────────────────────── */
+.tip {
+  background: var(--accent-blue-bg);
+  border-left: 3px solid var(--accent-blue);
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--accent-blue);
+  margin-top: 4px;
 }
 
-.quick-start-list li {
-  margin-bottom: var(--sp-8);
-}
-
+/* ── Footer ───────────────────────────────────────────────── */
 .welcome-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--sp-16) var(--sp-32);
+  padding: 14px 28px;
   border-top: 1px solid var(--border-default);
+  background: var(--bg-panel-header);
 }
 
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: var(--sp-8);
+  gap: 8px;
   cursor: pointer;
   user-select: none;
   color: var(--text-secondary);
-  font-size: var(--fs-sm);
+  font-size: 13px;
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -282,21 +395,14 @@ const handleClose = () => {
   background: var(--accent-blue);
   color: var(--text-on-emphasis);
   border: none;
-  padding: 6px 20px;
+  padding: 8px 28px;
   border-radius: var(--radius-md);
-  font-size: var(--fs-sm);
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   font-family: var(--font-sans);
   cursor: pointer;
   transition: background 0.12s;
 }
 
-.start-btn:hover {
-  background: #4c9aed;
-}
-
-.welcome-modal::-webkit-scrollbar { width: 6px; }
-.welcome-modal::-webkit-scrollbar-track { background: transparent; }
-.welcome-modal::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 3px; }
-.welcome-modal::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+.start-btn:hover { background: #2560d4; }
 </style>
