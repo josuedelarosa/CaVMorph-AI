@@ -219,6 +219,69 @@ def _result_to_response(result: InferenceResult) -> Dict[str, Any]:
 
 
 # --------------------------------------------------
+# Memory-efficient image loading
+# --------------------------------------------------
+_JPEG_EXTS = frozenset({".jpg", ".jpeg"})
+_INFER_MAX = 2048  # max dimension (px) for inference — far above model input size
+
+
+def _read_for_inference(p: str):
+    """Load image at reduced resolution where possible.
+
+    For JPEG files, OpenCV's IMREAD_REDUCED_COLOR_4 instructs the JPEG
+    codec to decode at 1/4 linear resolution, so a 6000×4000 photo
+    returns a 1500×1000 array — never allocating the ~130 MB full-res
+    buffer. For other formats (TIFF, PNG, BMP) we read full-res and
+    immediately resize if the image exceeds _INFER_MAX.
+
+    Returns:
+        (bgr_array, scale_factor)  where original_coord = infer_coord * scale_factor.
+        Returns (None, 1.0) if the image cannot be read.
+    """
+    ext = Path(p).suffix.lower()
+    if ext in _JPEG_EXTS:
+        bgr4 = cv2.imread(p, cv2.IMREAD_REDUCED_COLOR_4)
+        if bgr4 is not None:
+            return bgr4, 4.0
+        # Tiny JPEG or read failure — fall through to full-res read
+    bgr = cv2.imread(p, cv2.IMREAD_COLOR)
+    if bgr is None:
+        return None, 1.0
+    h, w = bgr.shape[:2]
+    if max(h, w) > _INFER_MAX:
+        s = _INFER_MAX / max(h, w)
+        bgr_small = cv2.resize(
+            bgr, (max(1, int(w * s)), max(1, int(h * s))), interpolation=cv2.INTER_AREA
+        )
+        del bgr
+        return bgr_small, 1.0 / s
+    return bgr, 1.0
+
+
+def _scale_resp_to_original(resp: Dict[str, Any], scale: float) -> None:
+    """Scale keypoint coordinates and phenotype pixel distances in-place
+    from inference-image space back to original-image space.
+    Call this after inference when scale_factor != 1.0.
+    """
+    if scale == 1.0:
+        return
+    kpts = resp.get("keypoints")
+    if kpts:
+        if isinstance(kpts[0], list) and kpts[0] and isinstance(kpts[0][0], list):
+            resp["keypoints"] = [[[c * scale for c in xy] for xy in fr] for fr in kpts]
+        elif isinstance(kpts[0], (list, tuple)):
+            resp["keypoints"] = [[c * scale for c in xy] for xy in kpts]
+    phenotypes = (resp.get("extra_pred_fields") or {}).get("phenotypes")
+    if phenotypes:
+        for ph in phenotypes:
+            if "value_px" in ph:
+                ph["value_px"] = ph["value_px"] * scale
+    bboxes = resp.get("bboxes")
+    if bboxes:
+        resp["bboxes"] = [[c * scale for c in box] for box in bboxes]
+
+
+# --------------------------------------------------
 # Endpoints (same contract as legacy backend)
 # --------------------------------------------------
 @app.get("/")
@@ -247,7 +310,8 @@ def infer_one(req: InferImageReq) -> Dict[str, Any]:
     if not os.path.exists(img_path):
         raise HTTPException(status_code=404, detail=f"Image not found: {img_path}")
 
-    bgr = cv2.imread(img_path, cv2.IMREAD_COLOR)
+    # Read at reduced resolution (never allocates full-res array for large JPEGs)
+    bgr, infer_scale = _read_for_inference(img_path)
     if bgr is None:
         raise HTTPException(status_code=400, detail=f"Failed to read image: {img_path}")
 
@@ -256,19 +320,49 @@ def infer_one(req: InferImageReq) -> Dict[str, Any]:
     resp = _result_to_response(result)
 
     if req.return_overlay_png:
-        overlay = _draw_overlay(bgr, resp)
-        del bgr
+        # bgr is already at reduced resolution (≤ 2048px).
+        # If it still exceeds the preview cap, resize further for overlay.
+        _MAX_OV = 1200
+        h_bgr, w_bgr = bgr.shape[:2]
+        if max(h_bgr, w_bgr) > _MAX_OV:
+            _ov_s = _MAX_OV / max(h_bgr, w_bgr)
+            bgr_draw = cv2.resize(
+                bgr,
+                (max(1, int(w_bgr * _ov_s)), max(1, int(h_bgr * _ov_s))),
+                interpolation=cv2.INTER_AREA,
+            )
+            del bgr
+            # Keypoints are in infer-image coords; scale to bgr_draw coords for drawing
+            _kpts = resp.get("keypoints", [])
+            if _kpts:
+                if isinstance(_kpts[0], list) and _kpts[0] and isinstance(_kpts[0][0], list):
+                    resp_draw = {**resp, "keypoints": [[[c * _ov_s for c in xy] for xy in fr] for fr in _kpts]}
+                else:
+                    resp_draw = {**resp, "keypoints": [[c * _ov_s for c in xy] for xy in _kpts]}
+            else:
+                resp_draw = resp
+        else:
+            bgr_draw = bgr
+            del bgr
+            resp_draw = resp
+        overlay = _draw_overlay(bgr_draw, resp_draw)
+        del bgr_draw
+        if resp_draw is not resp:
+            del resp_draw
+
+        # Scale keypoints to original-image coordinates now that drawing is done
+        _scale_resp_to_original(resp, infer_scale)
+
         tmp_dir = (MODEL_DIR / "tmp").resolve()
         tmp_dir.mkdir(parents=True, exist_ok=True)
-
         stem = Path(img_path).stem
 
-        # Full-res overlay for export (disk only)
+        # Save overlay to disk
         out_path = tmp_dir / (stem + "_overlay.jpg")
         cv2.imwrite(str(out_path), overlay, [cv2.IMWRITE_JPEG_QUALITY, 95])
         resp["overlay_path"] = str(out_path)
 
-        # Medium preview for display (max 800px wide, JPEG q65, ~50-80 KB)
+        # Medium preview for display (max 800px wide, JPEG q65)
         h_ov, w_ov = overlay.shape[:2]
         _pw = 800
         if w_ov > _pw:
@@ -280,16 +374,24 @@ def infer_one(req: InferImageReq) -> Dict[str, Any]:
         resp["overlay_preview_base64"] = base64.b64encode(prev_buf).decode("utf-8")
         del preview, prev_buf
 
-        # Tiny thumbnail (~3-5 KB) for sidebar strip
-        _tw = 160
+        # Thumbnail for sidebar strip.
+        # Never upscale: keep native size if overlay is already <= 160 px wide.
+        # Use INTER_AREA for large downscales, INTER_CUBIC for small ones.
+        _tw = min(w_ov, 160)
         _th = max(1, int(_tw * h_ov / w_ov))
-        thumb = cv2.resize(overlay, (_tw, _th), interpolation=cv2.INTER_AREA)
-        _, thumb_buf = cv2.imencode(".jpg", thumb, [cv2.IMWRITE_JPEG_QUALITY, 50])
+        if w_ov > _tw:
+            _interp = cv2.INTER_AREA if w_ov > _tw * 2 else cv2.INTER_CUBIC
+            thumb = cv2.resize(overlay, (_tw, _th), interpolation=_interp)
+        else:
+            thumb = overlay
+        _, thumb_buf = cv2.imencode(".jpg", thumb, [cv2.IMWRITE_JPEG_QUALITY, 70])
         resp["overlay_thumbnail_base64"] = base64.b64encode(thumb_buf).decode("utf-8")
         del overlay, thumb, thumb_buf
     else:
         del bgr
+        _scale_resp_to_original(resp, infer_scale)
 
+    resp["file_size"] = os.path.getsize(img_path)
     return resp
 
 
@@ -307,13 +409,16 @@ def infer_folder(req: InferFolderReq) -> Dict[str, Any]:
     import gc
     preds = []
     for i, p in enumerate(_iter_images(folder)):
-        bgr = cv2.imread(p, cv2.IMREAD_COLOR)
+        # Read at reduced resolution — for JPEG this avoids ever allocating the
+        # full-res array (e.g. 8 MB instead of 130 MB for a 35 MP camera photo).
+        bgr, infer_scale = _read_for_inference(p)
         if bgr is None:
             continue
 
         result = engine.infer(bgr)
         result.image_path = p
         resp = _result_to_response(result)
+        # resp["keypoints"] are in infer-image coordinates at this point.
 
         if req.profile_id:
             resp["profile_id"] = req.profile_id
@@ -321,42 +426,72 @@ def infer_folder(req: InferFolderReq) -> Dict[str, Any]:
             resp["profile_name"] = req.profile_name
 
         if req.return_overlay_png and tmp_dir:
-            overlay = _draw_overlay(bgr, resp)
-            del bgr
+            # bgr is already at ≤ 2048 px.  Cap further to 1200 px for the overlay
+            # so the thumbnail/preview stay small.
+            _MAX_OV = 1200
+            h_bgr, w_bgr = bgr.shape[:2]
+            if max(h_bgr, w_bgr) > _MAX_OV:
+                _ov_s = _MAX_OV / max(h_bgr, w_bgr)
+                bgr_draw = cv2.resize(
+                    bgr,
+                    (max(1, int(w_bgr * _ov_s)), max(1, int(h_bgr * _ov_s))),
+                    interpolation=cv2.INTER_AREA,
+                )
+                del bgr
+                # Scale keypoints from infer coords to bgr_draw coords for drawing
+                _kpts = resp.get("keypoints", [])
+                if _kpts:
+                    if isinstance(_kpts[0], list) and _kpts[0] and isinstance(_kpts[0][0], list):
+                        resp_draw = {**resp, "keypoints": [[[c * _ov_s for c in xy] for xy in fr] for fr in _kpts]}
+                    else:
+                        resp_draw = {**resp, "keypoints": [[c * _ov_s for c in xy] for xy in _kpts]}
+                else:
+                    resp_draw = resp
+            else:
+                bgr_draw = bgr
+                del bgr
+                resp_draw = resp
+            overlay = _draw_overlay(bgr_draw, resp_draw)
+            del bgr_draw
+            if resp_draw is not resp:
+                del resp_draw
+
+            # Scale keypoints to original-image coordinates
+            _scale_resp_to_original(resp, infer_scale)
+
             stem = Path(p).stem
 
-            # Full-res overlay for export (disk only)
+            # Save overlay to disk (at capped resolution)
             out_path = tmp_dir / (stem + "_overlay.jpg")
             cv2.imwrite(str(out_path), overlay, [cv2.IMWRITE_JPEG_QUALITY, 95])
             resp["overlay_path"] = str(out_path)
 
-            # Medium preview for display (max 800px wide, JPEG q65, ~50-80 KB)
+            # Thumbnail for sidebar strip.
+            # Never upscale: keep native size if overlay is already <= 160 px wide.
+            # Use INTER_AREA for large downscales, INTER_CUBIC for small ones.
             h_ov, w_ov = overlay.shape[:2]
-            _pw = 800
-            if w_ov > _pw:
-                _ph = max(1, int(_pw * h_ov / w_ov))
-                preview = cv2.resize(overlay, (_pw, _ph), interpolation=cv2.INTER_AREA)
-            else:
-                preview = overlay
-            _, prev_buf = cv2.imencode(".jpg", preview, [cv2.IMWRITE_JPEG_QUALITY, 65])
-            resp["overlay_preview_base64"] = base64.b64encode(prev_buf).decode("utf-8")
-            del preview, prev_buf
-
-            # Tiny thumbnail (~3-5 KB) for sidebar strip
-            _tw = 160
+            _tw = min(w_ov, 160)
             _th = max(1, int(_tw * h_ov / w_ov))
-            thumb = cv2.resize(overlay, (_tw, _th), interpolation=cv2.INTER_AREA)
-            _, thumb_buf = cv2.imencode(".jpg", thumb, [cv2.IMWRITE_JPEG_QUALITY, 50])
+            if w_ov > _tw:
+                _interp = cv2.INTER_AREA if w_ov > _tw * 2 else cv2.INTER_CUBIC
+                thumb = cv2.resize(overlay, (_tw, _th), interpolation=_interp)
+            else:
+                thumb = overlay
+            _, thumb_buf = cv2.imencode(".jpg", thumb, [cv2.IMWRITE_JPEG_QUALITY, 70])
             resp["overlay_thumbnail_base64"] = base64.b64encode(thumb_buf).decode("utf-8")
             del overlay, thumb, thumb_buf
+            # overlay_preview_base64 intentionally omitted from the folder batch.
+            # The frontend lazy-loads it from overlay_path when the user selects a result.
         else:
             del bgr
+            _scale_resp_to_original(resp, infer_scale)
 
+        resp["file_size"] = os.path.getsize(p)
         preds.append(resp)
         if req.limit is not None and (i + 1) >= req.limit:
             break
-        # Hint GC every 20 images to return freed numpy memory
-        if i % 20 == 19:
+        # Hint GC every 10 images to release numpy/OpenCV memory pools
+        if i % 10 == 9:
             gc.collect()
 
     gc.collect()

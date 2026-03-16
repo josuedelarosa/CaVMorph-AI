@@ -22,6 +22,7 @@ export interface PredictionResult {
   overlay_path?: string
   overlay_preview_base64?: string
   overlay_thumbnail_base64?: string
+  file_size?: number
 }
 
 export interface BatchResult {
@@ -64,4 +65,6 @@ export interface AppConfig {
   activeProfileId: string
   profiles: Profile[]
   darkMode: boolean
+  contributionOptIn: boolean
+  anonymousId: string
 }

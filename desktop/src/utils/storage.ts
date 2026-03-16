@@ -19,6 +19,20 @@ const DEFAULT_CONFIG: AppConfig = {
     },
   ],
   darkMode: false,
+  contributionOptIn: false,
+  anonymousId: '',
+}
+
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  // Fallback for environments without crypto.randomUUID
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
 }
 
 async function getConfigPath(): Promise<string> {
@@ -108,4 +122,17 @@ export async function setDarkMode(isDark: boolean): Promise<void> {
   const config = await loadConfig()
   config.darkMode = isDark
   await saveConfig(config)
+}
+
+export async function setContributionOptIn(value: boolean): Promise<void> {
+  const config = await loadConfig()
+  await saveConfig({ ...config, contributionOptIn: value })
+}
+
+export async function getOrCreateAnonymousId(): Promise<string> {
+  const config = await loadConfig()
+  if (config.anonymousId) return config.anonymousId
+  const id = generateUUID()
+  await saveConfig({ ...config, anonymousId: id })
+  return id
 }

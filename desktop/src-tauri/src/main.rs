@@ -14,6 +14,9 @@ use tauri::{AppHandle, Manager};
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
+#[cfg(unix)]
+use std::os::unix::process::CommandExt as UnixCommandExt;
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -560,6 +563,17 @@ uvicorn.run(app, host='127.0.0.1', port={}, log_level='info')
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 
+    // On Unix, place the child in its own session so that all descendant
+    // processes (uvicorn workers, onnxruntime threads, etc.) share a common
+    // process group that we can kill as a unit on exit.
+    #[cfg(unix)]
+    unsafe {
+        cmd.pre_exec(|| {
+            libc::setsid();
+            Ok(())
+        });
+    }
+
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("Failed to spawn backend: {}", e))?;
@@ -1014,6 +1028,17 @@ fn main() {
                 let state = event.window().state::<AppState>();
                 let mut guard = state.backend_process.lock().unwrap();
                 if let Some(ref mut child) = *guard {
+                    // On Unix: kill the entire process group (Python + uvicorn
+                    // workers + any onnxruntime subprocesses).  After setsid()
+                    // in the child, PGID == child PID, so -pid targets the group.
+                    #[cfg(unix)]
+                    {
+                        let pid = child.id() as i32;
+                        unsafe { libc::kill(-pid, libc::SIGTERM); }
+                        thread::sleep(Duration::from_millis(400));
+                        unsafe { libc::kill(-pid, libc::SIGKILL); }
+                    }
+                    // Fallback / Windows: kill the root child process directly.
                     let _ = child.kill();
                 }
                 *guard = None;

@@ -41,6 +41,18 @@
           <button @click="infoMessage = ''">×</button>
         </div>
 
+    <!-- Contribution consent banner -->
+        <div v-if="showContributionBanner" class="panel-alert panel-alert-contribution">
+          <div class="contribution-banner-body">
+            <div class="contribution-banner-title">Help improve PhenoAI</div>
+            <p class="contribution-banner-text">Share your fish images and anonymous measurements to support academic research. File system paths and personal information are <strong>never</strong> sent. Data is used exclusively to improve model accuracy.</p>
+            <div class="contribution-banner-btns">
+              <button class="btn-xs btn-outline" @click="acceptContribution(true)">Yes, contribute</button>
+              <button class="btn-xs btn-ghost" @click="acceptContribution(false)">No thanks</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Dataset ──────────────────────────────────────────── -->
         <div class="panel-section">
           <div class="panel-section-title">Dataset</div>
@@ -346,9 +358,11 @@
       :profiles="profiles"
       :activeProfileId="activeProfileId"
       :keypointNames="modelInfo?.keypoint_names || []"
+      :contributionOptIn="contributionOptIn"
       @close="showSettings = false"
       @save="handleSettingsSave"
       @delete="handleDeleteProfile"
+      @contribution-change="handleContributionChange"
     />
 
     <!-- Welcome Guide -->
@@ -386,7 +400,10 @@ import {
   deleteProfile,
   setActiveProfile,
   setDarkMode,
+  setContributionOptIn,
+  getOrCreateAnonymousId,
 } from './utils/storage'
+import { uploadContributions } from './utils/contribution'
 
 // Setup State
 const needsSetup = ref(true)  // Default to showing setup, will be checked on mount
@@ -414,6 +431,10 @@ const activeProfileId = ref('default')
 const selectedKeypoints = ref<Set<number>>(new Set())
 const selectedProfileFilter = ref('')
 const showWelcome = ref(false)
+const contributionOptIn = ref(false)
+const anonymousId = ref('')
+const showContributionBanner = ref(false)
+const pendingContributionBatch = ref<PredictionResult[]>([])
 
 // Resizable panels
 const viewerHeight = ref(460)      // px — draggable row height
@@ -639,13 +660,13 @@ function getPhenotypeValue(pred: PredictionResult, phenotypeName: string): strin
 
 function selectPrediction(idx: number) {
   selectedPredictionIdx.value = idx
-  drawPreview()
+  loadPreviewForIdx(idx)
 }
 
 function selectPredictionFromFiltered(idx: number, pred: PredictionResult) {
   selectedPredictionIdx.value = idx
   // Keep current profile filter selection (don't auto-switch)
-  drawPreview()
+  loadPreviewForIdx(idx)
 }
 
 function deselectImage(idx: number) {
@@ -654,7 +675,7 @@ function deselectImage(idx: number) {
     selectedPredictionIdx.value = Math.max(0, predictions.value.length - 1)
   }
   if (predictions.value.length > 0) {
-    drawPreview()
+    loadPreviewForIdx(selectedPredictionIdx.value)
   } else {
     selectedPredictionIdx.value = -1
   }
@@ -745,6 +766,17 @@ async function startAnalysis() {
 
     state.value = 'complete'
     infoMessage.value = `Analysis complete! Processed ${totalProcessed} images.`
+
+    // Fire anonymous contributions sequentially in background (one image at a time)
+    if (contributionOptIn.value && anonymousId.value) {
+      const logger = { log: console.log, warn: console.warn }
+      uploadContributions(allPredictions, anonymousId.value, logger)
+    }
+    // Show contribution banner after every analysis if the user hasn't opted in yet
+    if (!contributionOptIn.value) {
+      pendingContributionBatch.value = [...allPredictions]
+      showContributionBanner.value = true
+    }
 
     if (predictions.value.length > 0) {
       selectPrediction(0)
@@ -876,6 +908,32 @@ function clearResults() {
     predictions.value = []
     folderPath.value = ''
     state.value = 'idle'
+  }
+}
+
+// Lazy-load overlay preview from disk when the user selects a prediction.
+// The batch response omits overlay_preview_base64 to keep the JSON response small;
+// we read the JPEG from overlay_path only for the one image being viewed.
+async function loadPreviewForIdx(idx: number) {
+  const pred = predictions.value[idx]
+  if (!pred) return
+  // Already cached — let the reactive <img> element render it
+  if (pred.overlay_preview_base64) { drawPreview(); return }
+  // No overlay on disk — canvas fallback
+  if (!pred.overlay_path) { drawPreview(); return }
+  try {
+    const bytes = await readBinaryFile(pred.overlay_path)
+    const uint8 = new Uint8Array(bytes)
+    let binary = ''
+    const CHUNK = 8192
+    for (let i = 0; i < uint8.length; i += CHUNK) {
+      binary += String.fromCharCode(...uint8.subarray(i, i + CHUNK))
+    }
+    // Cache in the prediction object so re-selecting doesn't re-read the file
+    predictions.value[idx] = { ...predictions.value[idx], overlay_preview_base64: btoa(binary) }
+    // Vue reactive update triggers the <img> element automatically
+  } catch {
+    drawPreview() // canvas fallback on read error
   }
 }
 
@@ -1162,6 +1220,22 @@ async function checkIfSetupNeeded(): Promise<boolean> {
   }
 }
 
+async function handleContributionChange(value: boolean) {
+  contributionOptIn.value = value
+  await setContributionOptIn(value)
+}
+
+async function acceptContribution(value: boolean) {
+  showContributionBanner.value = false
+  await handleContributionChange(value)
+  // If the user just opted in, immediately upload the batch from this analysis
+  if (value && pendingContributionBatch.value.length && anonymousId.value) {
+    const logger = { log: console.log, warn: console.warn }
+    uploadContributions(pendingContributionBatch.value, anonymousId.value, logger)
+  }
+  pendingContributionBatch.value = []
+}
+
 async function onSetupComplete() {
   needsSetup.value = false
   
@@ -1215,6 +1289,8 @@ async function onSetupComplete() {
     if (activeProfile) {
       selectedKeypoints.value = new Set(activeProfile.selected_keypoints || activeProfile.selectedKeypoints)
     }
+    contributionOptIn.value = config.contributionOptIn ?? false
+    anonymousId.value = await getOrCreateAnonymousId()
   } catch (err) {
     console.error('Failed to load config after setup, using defaults:', err)
     // Fallback to default profile if config loading completely fails
@@ -1355,6 +1431,8 @@ onMounted(async () => {
       if (activeProfile) {
         selectedKeypoints.value = new Set(activeProfile.selected_keypoints || activeProfile.selectedKeypoints)
       }
+      contributionOptIn.value = config.contributionOptIn ?? false
+      anonymousId.value = await getOrCreateAnonymousId()
     } catch (err) {
       console.error('Failed to load config, using defaults:', err)
       // Fallback to default profile if config loading completely fails
@@ -1390,7 +1468,7 @@ onBeforeUnmount(() => {
 
 watch(() => selectedPredictionIdx.value, async () => {
   await nextTick()
-  drawPreview()
+  loadPreviewForIdx(selectedPredictionIdx.value)
 })
 
 // Reset selection when filtering by profile
@@ -1402,7 +1480,7 @@ watch(() => selectedProfileFilter.value, () => {
 watch(() => filteredPredictions.value.length, async () => {
   if (filteredPredictions.value.length > 0) {
     await nextTick()
-    drawPreview()
+    loadPreviewForIdx(selectedPredictionIdx.value)
   }
 })
 </script>

@@ -69,6 +69,26 @@
             </div>
           </div>
 
+          <!-- Data & Privacy -->
+          <div class="col-section privacy-section">
+            <div class="col-section-title">Data &amp; Privacy</div>
+            <label class="privacy-toggle-row">
+              <input
+                type="checkbox"
+                :checked="props.contributionOptIn"
+                @change="handleContributionToggle"
+              />
+              <span class="privacy-toggle-label">Help improve PhenoAI</span>
+            </label>
+            <p class="privacy-note">
+              Share your fish images along with anonymous keypoint coordinates,
+              confidence scores, and morphometric measurements. File system paths
+              and personal information are <strong>never</strong> sent &mdash;
+              only the image file and numerical predictions. Data is used
+              exclusively for academic research to improve model accuracy.
+            </p>
+          </div>
+
         </div><!-- /.col-left -->
 
         <!-- Column divider -->
@@ -123,6 +143,7 @@ interface Props {
   profiles: Profile[]
   activeProfileId: string
   keypointNames: string[]
+  contributionOptIn: boolean
 }
 
 interface Emits {
@@ -133,6 +154,7 @@ interface Emits {
     newProfile?: { name: string; description: string }
   }): void
   (e: 'delete', profileId: string): void
+  (e: 'contribution-change', value: boolean): void
 }
 
 const props = defineProps<Props>()
@@ -213,6 +235,10 @@ function createNewProfile() {
 
 function deleteCurrentProfile(profileId: string) {
   if (confirm('Delete this profile?')) emit('delete', profileId)
+}
+
+function handleContributionToggle(e: Event) {
+  emit('contribution-change', (e.target as HTMLInputElement).checked)
 }
 
 function saveSettings() {
@@ -518,6 +544,41 @@ loadKeypointsForProfile()
   transition: background 0.1s;
 }
 .btn-create:hover { background: #2560d4; }
+
+/* ── Privacy section ─────────────────────────────────────── */
+.privacy-section {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-muted);
+  padding-top: 12px;
+}
+
+.privacy-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.privacy-toggle-row input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: var(--accent-blue);
+}
+
+.privacy-toggle-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.privacy-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
 
 /* ── Keypoint scroll area ─────────────────────────────────── */
 .keypoint-hint {

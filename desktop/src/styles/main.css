@@ -234,6 +234,18 @@ html, body {
 }
 .panel-alert button:hover { opacity: 1; }
 
+.panel-alert-contribution {
+  background: #ECFDF5;
+  border-color: #6EE7B7;
+  color: #065F46;
+  flex-direction: column;
+  align-items: stretch;
+}
+.contribution-banner-body { display: flex; flex-direction: column; gap: 6px; }
+.contribution-banner-title { font-size: var(--fs-sm); font-weight: 600; }
+.contribution-banner-text { font-size: var(--fs-xs); line-height: 1.5; margin: 0; }
+.contribution-banner-btns { display: flex; gap: 6px; margin-top: 4px; }
+
 /* Dataset rows */
 .dataset-row {
   margin-bottom: var(--sp-8);
@@ -616,7 +628,6 @@ html, body {
   align-items: center;
   justify-content: center;
   width: 100%;
-  aspect-ratio: 1;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: var(--bg-canvas);
@@ -634,8 +645,8 @@ html, body {
 
 .thumb-img {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  height: auto;
+  display: block;
 }
 
 .thumb-num {
