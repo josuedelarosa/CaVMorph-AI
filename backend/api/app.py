@@ -257,23 +257,21 @@ def infer_one(req: InferImageReq) -> Dict[str, Any]:
         import base64
         h, w = bgr.shape[:2]
         logger.info(f"Creating overlay for image size: {w}x{h}")
-        
-        # Create FULL RESOLUTION overlay (no downscaling at all)
         over_full = draw_overlay(bgr, pred)
         out_path_full = tmp_dir / (Path(img_path).stem + "_overlay.jpg")
-        # Save as JPEG with quality 95 for smaller file size
         cv2.imwrite(str(out_path_full), over_full, [cv2.IMWRITE_JPEG_QUALITY, 95])
-        logger.info(f"Saved full resolution overlay: {out_path_full}, size: {over_full.shape[1]}x{over_full.shape[0]}")
+        logger.info(f"Saved overlay: {out_path_full}")
 
         if isinstance(pred, dict):
-            # Use full resolution overlay path for export
             pred["overlay_path"] = str(out_path_full)
-            
-            # Encode full resolution as JPEG for UI (quality 95)
-            encode_params = [cv2.IMWRITE_JPEG_QUALITY, 95]
-            _, buffer = cv2.imencode('.jpg', over_full, encode_params)
-            pred["overlay_png_base64"] = base64.b64encode(buffer).decode('utf-8')
-            logger.info(f"Encoded full resolution overlay - size: {over_full.shape[1]}x{over_full.shape[0]}, JPEG size: {len(buffer)/1024:.1f}KB")
+            # Tiny thumbnail for sidebar strip (~3-5 KB). 160px wide, JPEG q50.
+            _tw = 160
+            _th = max(1, int(_tw * over_full.shape[0] / over_full.shape[1]))
+            thumb = cv2.resize(over_full, (_tw, _th), interpolation=cv2.INTER_AREA)
+            _, thumb_buf = cv2.imencode('.jpg', thumb, [cv2.IMWRITE_JPEG_QUALITY, 50])
+            pred["overlay_thumbnail_base64"] = base64.b64encode(thumb_buf).decode('utf-8')
+            del thumb, thumb_buf
+        del over_full
 
     return pred
 
@@ -314,29 +312,24 @@ def infer_folder(req: InferFolderReq) -> Dict[str, Any]:
 
         if req.return_overlay_png and isinstance(pred, dict) and tmp_dir is not None:
             import base64
-            h, w = bgr.shape[:2]
-            
-            # Create FULL RESOLUTION overlay (no downscaling at all)
             over_full = draw_overlay(bgr, pred)
             out_path_full = tmp_dir / (Path(p).stem + "_overlay.jpg")
-            # Save as JPEG with quality 95 for smaller file size
             cv2.imwrite(str(out_path_full), over_full, [cv2.IMWRITE_JPEG_QUALITY, 95])
-            
-            # Use full resolution overlay path for export
             pred["overlay_path"] = str(out_path_full)
-            
-            # Encode full resolution as JPEG for UI
-            encode_params = [cv2.IMWRITE_JPEG_QUALITY, 95]
-            _, buffer = cv2.imencode('.jpg', over_full, encode_params)
-            pred["overlay_png_base64"] = base64.b64encode(buffer).decode('utf-8')
-            if i == 0:  # Log first image only
-                logger.info(f"Batch: Full resolution overlay - size: {over_full.shape[1]}x{over_full.shape[0]}, JPEG size: {len(buffer)/1024:.1f}KB")
+            # Tiny thumbnail for sidebar strip (~3-5 KB). 160px wide, JPEG q50.
+            _tw = 160
+            _th = max(1, int(_tw * over_full.shape[0] / over_full.shape[1]))
+            thumb = cv2.resize(over_full, (_tw, _th), interpolation=cv2.INTER_AREA)
+            _, thumb_buf = cv2.imencode('.jpg', thumb, [cv2.IMWRITE_JPEG_QUALITY, 50])
+            pred["overlay_thumbnail_base64"] = base64.b64encode(thumb_buf).decode('utf-8')
+            del thumb, thumb_buf, over_full
 
         preds.append(pred)
 
         if req.limit is not None and (i + 1) >= req.limit:
             break
 
+    import gc; gc.collect()
     return {"count": len(preds), "predictions": preds}
 
 # --------------------------------------------------

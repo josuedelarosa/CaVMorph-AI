@@ -129,7 +129,7 @@ def _draw_overlay(bgr: np.ndarray, pred: Dict[str, Any]) -> np.ndarray:
         if s < 0.05 or not np.isfinite(x) or not np.isfinite(y):
             continue
         cv2.circle(out, (int(round(x)), int(round(y))), radius, (0, 0, 255), -1, cv2.LINE_AA)
-        label = str(i)
+        label = str(i + 1)  # 1-based
         font_scale = max(0.5, min(h, w) * 0.001)
         font_thick = max(2, int(min(h, w) * 0.003))
         offset_y = int(radius * 2.5)
@@ -162,8 +162,19 @@ def _export_csv(path: str, predictions: list, meta_dict: dict):
 
 def _export_json(path: str, predictions: list):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
+    # Strip value_norm from phenotypes before writing
+    clean = []
+    for pred in predictions:
+        p = dict(pred)
+        extra = p.get("extra_pred_fields")
+        if extra:
+            extra = dict(extra)
+            if extra.get("phenotypes"):
+                extra["phenotypes"] = [{k: v for k, v in ph.items() if k != "value_norm"} for ph in extra["phenotypes"]]
+            p["extra_pred_fields"] = extra
+        clean.append(p)
     with open(path, "w") as f:
-        json.dump(list(predictions), f, indent=2)
+        json.dump(clean, f, indent=2)
 
 
 def _export_annotated_images(output_dir: str, predictions: list, suffix: str = "_annotated"):
@@ -246,15 +257,38 @@ def infer_one(req: InferImageReq) -> Dict[str, Any]:
 
     if req.return_overlay_png:
         overlay = _draw_overlay(bgr, resp)
+        del bgr
         tmp_dir = (MODEL_DIR / "tmp").resolve()
         tmp_dir.mkdir(parents=True, exist_ok=True)
 
-        out_path = tmp_dir / (Path(img_path).stem + "_overlay.jpg")
+        stem = Path(img_path).stem
+
+        # Full-res overlay for export (disk only)
+        out_path = tmp_dir / (stem + "_overlay.jpg")
         cv2.imwrite(str(out_path), overlay, [cv2.IMWRITE_JPEG_QUALITY, 95])
         resp["overlay_path"] = str(out_path)
 
-        _, buffer = cv2.imencode(".jpg", overlay, [cv2.IMWRITE_JPEG_QUALITY, 95])
-        resp["overlay_png_base64"] = base64.b64encode(buffer).decode("utf-8")
+        # Medium preview for display (max 800px wide, JPEG q65, ~50-80 KB)
+        h_ov, w_ov = overlay.shape[:2]
+        _pw = 800
+        if w_ov > _pw:
+            _ph = max(1, int(_pw * h_ov / w_ov))
+            preview = cv2.resize(overlay, (_pw, _ph), interpolation=cv2.INTER_AREA)
+        else:
+            preview = overlay
+        _, prev_buf = cv2.imencode(".jpg", preview, [cv2.IMWRITE_JPEG_QUALITY, 65])
+        resp["overlay_preview_base64"] = base64.b64encode(prev_buf).decode("utf-8")
+        del preview, prev_buf
+
+        # Tiny thumbnail (~3-5 KB) for sidebar strip
+        _tw = 160
+        _th = max(1, int(_tw * h_ov / w_ov))
+        thumb = cv2.resize(overlay, (_tw, _th), interpolation=cv2.INTER_AREA)
+        _, thumb_buf = cv2.imencode(".jpg", thumb, [cv2.IMWRITE_JPEG_QUALITY, 50])
+        resp["overlay_thumbnail_base64"] = base64.b64encode(thumb_buf).decode("utf-8")
+        del overlay, thumb, thumb_buf
+    else:
+        del bgr
 
     return resp
 
@@ -270,6 +304,7 @@ def infer_folder(req: InferFolderReq) -> Dict[str, Any]:
         tmp_dir = (MODEL_DIR / "tmp").resolve()
         tmp_dir.mkdir(parents=True, exist_ok=True)
 
+    import gc
     preds = []
     for i, p in enumerate(_iter_images(folder)):
         bgr = cv2.imread(p, cv2.IMREAD_COLOR)
@@ -287,16 +322,44 @@ def infer_folder(req: InferFolderReq) -> Dict[str, Any]:
 
         if req.return_overlay_png and tmp_dir:
             overlay = _draw_overlay(bgr, resp)
-            out_path = tmp_dir / (Path(p).stem + "_overlay.jpg")
+            del bgr
+            stem = Path(p).stem
+
+            # Full-res overlay for export (disk only)
+            out_path = tmp_dir / (stem + "_overlay.jpg")
             cv2.imwrite(str(out_path), overlay, [cv2.IMWRITE_JPEG_QUALITY, 95])
             resp["overlay_path"] = str(out_path)
-            _, buffer = cv2.imencode(".jpg", overlay, [cv2.IMWRITE_JPEG_QUALITY, 95])
-            resp["overlay_png_base64"] = base64.b64encode(buffer).decode("utf-8")
+
+            # Medium preview for display (max 800px wide, JPEG q65, ~50-80 KB)
+            h_ov, w_ov = overlay.shape[:2]
+            _pw = 800
+            if w_ov > _pw:
+                _ph = max(1, int(_pw * h_ov / w_ov))
+                preview = cv2.resize(overlay, (_pw, _ph), interpolation=cv2.INTER_AREA)
+            else:
+                preview = overlay
+            _, prev_buf = cv2.imencode(".jpg", preview, [cv2.IMWRITE_JPEG_QUALITY, 65])
+            resp["overlay_preview_base64"] = base64.b64encode(prev_buf).decode("utf-8")
+            del preview, prev_buf
+
+            # Tiny thumbnail (~3-5 KB) for sidebar strip
+            _tw = 160
+            _th = max(1, int(_tw * h_ov / w_ov))
+            thumb = cv2.resize(overlay, (_tw, _th), interpolation=cv2.INTER_AREA)
+            _, thumb_buf = cv2.imencode(".jpg", thumb, [cv2.IMWRITE_JPEG_QUALITY, 50])
+            resp["overlay_thumbnail_base64"] = base64.b64encode(thumb_buf).decode("utf-8")
+            del overlay, thumb, thumb_buf
+        else:
+            del bgr
 
         preds.append(resp)
         if req.limit is not None and (i + 1) >= req.limit:
             break
+        # Hint GC every 20 images to return freed numpy memory
+        if i % 20 == 19:
+            gc.collect()
 
+    gc.collect()
     return {"count": len(preds), "predictions": preds}
 
 

@@ -60,7 +60,7 @@ def export_csv(
     # Add phenotype columns (only for phenotypes that exist in filtered data)
     for pheno in phenotypes_data:
         pheno_name = pheno.get("name", f"pheno_{pheno.get('id', 0)}")
-        fieldnames.extend([f"{pheno_name}_px", f"{pheno_name}_norm"])
+        fieldnames.append(f"{pheno_name}_px")
 
     with open(path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -141,16 +141,34 @@ def export_csv(
             for pheno in pred_phenotypes:
                 pheno_name = pheno.get("name", f"pheno_{pheno.get('id', 0)}")
                 row[f"{pheno_name}_px"] = pheno.get("value_px", "")
-                row[f"{pheno_name}_norm"] = pheno.get("value_norm", "")
 
             writer.writerow(row)
+
+
+def _strip_value_norm(predictions: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Return a copy of predictions with value_norm stripped from phenotype objects."""
+    result = []
+    for pred in predictions:
+        pred_copy = dict(pred)
+        extra = pred_copy.get("extra_pred_fields")
+        if extra:
+            extra_copy = dict(extra)
+            phenotypes = extra_copy.get("phenotypes")
+            if phenotypes:
+                extra_copy["phenotypes"] = [
+                    {k: v for k, v in p.items() if k != "value_norm"}
+                    for p in phenotypes
+                ]
+            pred_copy["extra_pred_fields"] = extra_copy
+        result.append(pred_copy)
+    return result
 
 
 def export_json(path: str, predictions: Sequence[Dict[str, Any]]) -> None:
     """Export predictions to JSON file."""
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
-        json.dump(list(predictions), f, indent=2)
+        json.dump(_strip_value_norm(predictions), f, indent=2)
 
 
 def export_annotated_images(

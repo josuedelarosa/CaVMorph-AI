@@ -65,7 +65,7 @@ def _iter_keypoints_from_pred(pred: Dict[str, Any]) -> List[Tuple[float, float, 
             x = _as_float(xy[0])
             y = _as_float(xy[1])
             s = _as_float(scores0[i], default=1.0) if scores0 is not None and i < len(scores0) else 1.0
-            out.append((x, y, s, str(i)))
+            out.append((x, y, s, str(i + 1)))
         return out
 
     return []
