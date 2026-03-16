@@ -1,85 +1,121 @@
 <template>
   <div v-if="isOpen" class="modal-overlay" @click.self="close">
     <div class="modal-content settings-modal">
+
+      <!-- Header -->
       <div class="modal-header">
         <h2>Profile Settings</h2>
         <button class="close-btn" @click="close">×</button>
       </div>
 
+      <!-- Two-column body -->
       <div class="modal-body">
-        <!-- Profile Selection -->
-        <div class="settings-section">
-          <h3>Active Profile</h3>
-          <select v-model="selectedProfileId" class="form-select">
-            <option v-for="profile in profiles" :key="profile.id" :value="profile.id">
-              {{ profile.name }}
-            </option>
-          </select>
-        </div>
 
-        <!-- Keypoint Selection -->
-        <div class="settings-section">
-          <h3>Selected Keypoints</h3>
-          <div class="keypoint-grid">
-            <label v-for="(name, idx) in keypointNames" :key="idx" class="keypoint-checkbox">
-              <input
-                type="checkbox"
-                :checked="isKeypointSelected(idx)"
-                @change="toggleKeypoint(idx)"
-              />
-              <span>{{ idx + 1 }}: {{ name }}</span>
-            </label>
-          </div>
-        </div>
+        <!-- ─── Left column: profile list + create form ─────────── -->
+        <div class="col-left">
 
-        <!-- Profile Management -->
-        <div class="settings-section">
-          <h3>Manage Profiles</h3>
-          <div class="profile-form">
-            <input v-model="newProfileName" placeholder="Profile name" class="form-input" />
-            <input v-model="newProfileDesc" placeholder="Description" class="form-input" />
-            <button @click="createNewProfile" class="btn btn-sm btn-primary">
-              Create Profile
-            </button>
-          </div>
-
-          <div v-if="profiles.length > 1" class="profile-list">
-            <div v-for="profile in profiles" :key="profile.id" class="profile-item">
-              <div class="profile-info">
-                <div class="profile-header-row">
-                  <strong>{{ profile.name }}</strong>
-                  <label class="toggle-label">
-                    <input type="checkbox" :checked="profile.enabled" @change="toggleProfileEnabled(profile.id)" />
-                    <span>{{ profile.enabled ? 'Enabled' : 'Disabled' }}</span>
-                  </label>
+          <!-- Profile list -->
+          <div class="col-section">
+            <div class="col-section-title">Profiles</div>
+            <div class="profile-list">
+              <div
+                v-for="profile in profiles"
+                :key="profile.id"
+                class="profile-item"
+                :class="{ 'profile-active': selectedProfileId === profile.id }"
+                @click="selectProfile(profile.id)"
+              >
+                <div class="profile-radio">
+                  <span class="radio-dot" :class="{ active: selectedProfileId === profile.id }"></span>
                 </div>
-                <small>{{ profile.description }}</small>
-                <div class="profile-folder" v-if="profile.folder_path">
-                  <small>{{ profile.folder_path }}</small>
+                <div class="profile-info">
+                  <div class="profile-name-row">
+                    <span class="profile-name">{{ profile.name }}</span>
+                    <span v-if="selectedProfileId === profile.id" class="badge-active">Active</span>
+                  </div>
+                  <div v-if="profile.description" class="profile-desc">{{ profile.description }}</div>
+                  <div v-if="profile.folder_path" class="profile-path">{{ profile.folder_path }}</div>
+                </div>
+                <div class="profile-actions">
+                  <button
+                    v-if="profile.id !== 'default'"
+                    class="btn-icon-danger"
+                    @click.stop="deleteCurrentProfile(profile.id)"
+                    title="Delete profile"
+                  >×</button>
                 </div>
               </div>
-              <button
-                v-if="profile.id !== 'default'"
-                @click="deleteCurrentProfile(profile.id)"
-                class="btn btn-sm btn-danger"
-              >
-                Delete
+            </div>
+          </div>
+
+          <!-- Create new profile -->
+          <div class="col-section create-section">
+            <div class="col-section-title">New Profile</div>
+            <div class="create-form">
+              <input
+                v-model="newProfileName"
+                placeholder="Profile name"
+                class="form-input"
+                @keydown.enter="createNewProfile"
+              />
+              <input
+                v-model="newProfileDesc"
+                placeholder="Description (optional)"
+                class="form-input"
+              />
+              <button class="btn btn-create" @click="createNewProfile">
+                + Create Profile
               </button>
             </div>
           </div>
-        </div>
+
+        </div><!-- /.col-left -->
+
+        <!-- Column divider -->
+        <div class="col-divider"></div>
+
+        <!-- ─── Right column: keypoints for active profile ──────── -->
+        <div class="col-right">
+          <div class="col-section-title">
+            Keypoints
+            <span class="col-section-sub">for: {{ currentProfile?.name ?? '—' }}</span>
+          </div>
+          <p class="keypoint-hint">Select the landmarks to detect for this profile.</p>
+          <div class="keypoint-scroll">
+            <label
+              v-for="kp in KEYPOINT_DEFS"
+              :key="kp.id"
+              class="keypoint-row"
+              :class="{ 'kp-checked': isKeypointSelected(kp.id - 1) }"
+            >
+              <input
+                type="checkbox"
+                :checked="isKeypointSelected(kp.id - 1)"
+                @change="toggleKeypoint(kp.id - 1)"
+              />
+              <span class="kp-num">{{ kp.id }}</span>
+              <span class="kp-label">{{ kp.name }}</span>
+            </label>
+          </div>
+          <div class="kp-summary">
+            {{ selectedKeypoints.size }} / {{ KEYPOINT_DEFS.length }} selected
+          </div>
+        </div><!-- /.col-right -->
+
+      </div><!-- /.modal-body -->
+
+      <!-- Footer -->
+      <div class="modal-footer">
+        <button class="btn btn-secondary" @click="close">Cancel</button>
+        <button class="btn btn-primary" @click="saveSettings">Save Changes</button>
       </div>
 
-      <div class="modal-footer">
-        <button @click="saveSettings" class="btn btn-primary">Save</button>
-        <button @click="close" class="btn btn-secondary">Cancel</button>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { Profile } from '../types'
 
 interface Props {
@@ -102,283 +138,157 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
+// ── Anatomical keypoint definitions ──────────────────────────────────────────
+const KEYPOINT_DEFS = [
+  { id:  1, name: 'Anterior snout / upper jaw tip' },
+  { id:  2, name: 'Caudal-fin base — standard length endpoint' },
+  { id:  3, name: 'Dorsal fin origin' },
+  { id:  4, name: 'Ventral body point — body depth reference' },
+  { id:  5, name: 'Dorsal head point' },
+  { id:  6, name: 'Ventral head point' },
+  { id:  7, name: 'Dorsal caudal peduncle' },
+  { id:  8, name: 'Ventral caudal peduncle' },
+  { id:  9, name: 'Upper caudal fin tip' },
+  { id: 10, name: 'Lower caudal fin tip' },
+  { id: 11, name: 'Dorsal eye margin' },
+  { id: 12, name: 'Ventral eye margin' },
+  { id: 13, name: 'Eye center' },
+  { id: 14, name: 'Posterior jaw / corner of mouth / jaw articulation' },
+  { id: 15, name: 'Pectoral fin origin' },
+  { id: 16, name: 'Pectoral fin insertion endpoint' },
+  { id: 17, name: 'Posterior opercular margin / posterior head limit' },
+  { id: 18, name: 'Distal tip of dorsal fin' },
+  { id: 19, name: 'Anal fin origin' },
+  { id: 20, name: 'Posterior end of anal fin base' },
+]
+
+// ── State ─────────────────────────────────────────────────────────────────────
 const selectedProfileId = ref(props.activeProfileId)
 const selectedKeypoints = ref<Set<number>>(new Set())
 const newProfileName = ref('')
 const newProfileDesc = ref('')
 
-const currentProfile = computed(() => props.profiles.find((p) => p.id === selectedProfileId.value))
+const currentProfile = computed(() =>
+  props.profiles.find(p => p.id === selectedProfileId.value)
+)
 
-const isKeypointSelected = (idx: number) => selectedKeypoints.value.has(idx)
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function isKeypointSelected(idx: number) {
+  return selectedKeypoints.value.has(idx)
+}
 
-const toggleKeypoint = (idx: number) => {
-  if (selectedKeypoints.value.has(idx)) {
-    selectedKeypoints.value.delete(idx)
-  } else {
-    selectedKeypoints.value.add(idx)
+function toggleKeypoint(idx: number) {
+  const s = new Set(selectedKeypoints.value)
+  if (s.has(idx)) s.delete(idx)
+  else s.add(idx)
+  selectedKeypoints.value = s
+}
+
+function selectProfile(id: string) {
+  selectedProfileId.value = id
+}
+
+function loadKeypointsForProfile() {
+  const profile = props.profiles.find(p => p.id === selectedProfileId.value)
+  if (profile) {
+    selectedKeypoints.value = new Set(
+      profile.selected_keypoints ?? (profile as any).selectedKeypoints ?? []
+    )
   }
 }
 
-const createNewProfile = () => {
-  if (!newProfileName.value.trim()) {
-    alert('Profile name is required')
-    return
-  }
-
+function createNewProfile() {
+  if (!newProfileName.value.trim()) return
   emit('save', {
     activeProfileId: selectedProfileId.value,
     selectedKeypoints: Array.from(selectedKeypoints.value),
     newProfile: {
-      name: newProfileName.value,
+      name: newProfileName.value.trim(),
       description: newProfileDesc.value || 'Custom profile',
     },
   })
-
   newProfileName.value = ''
   newProfileDesc.value = ''
 }
 
-const deleteCurrentProfile = (profileId: string) => {
-  if (confirm('Delete this profile?')) {
-    emit('delete', profileId)
-  }
+function deleteCurrentProfile(profileId: string) {
+  if (confirm('Delete this profile?')) emit('delete', profileId)
 }
 
-const toggleProfileEnabled = (profileId: string) => {
-  const profileIdx = props.profiles.findIndex(p => p.id === profileId)
-  if (profileIdx !== -1) {
-    props.profiles[profileIdx].enabled = !props.profiles[profileIdx].enabled
-  }
-}
-
-const saveSettings = () => {
+function saveSettings() {
   emit('save', {
     activeProfileId: selectedProfileId.value,
     selectedKeypoints: Array.from(selectedKeypoints.value),
   })
 }
 
-const close = () => emit('close')
+function close() { emit('close') }
 
-// Initialize selected keypoints when profile changes
-const updateSelectedKeypoints = () => {
-  if (currentProfile.value) {
-    selectedKeypoints.value = new Set(currentProfile.value.selected_keypoints || currentProfile.value.selectedKeypoints || [])
-  }
-}
-
-// Watch for profile changes
-import { watch } from 'vue'
-watch(() => props.activeProfileId, () => {
-  selectedProfileId.value = props.activeProfileId
-  updateSelectedKeypoints()
+// ── Watchers ──────────────────────────────────────────────────────────────────
+watch(() => props.activeProfileId, (id) => {
+  selectedProfileId.value = id
+  loadKeypointsForProfile()
 })
 
-// Watch when modal opens to reload keypoints
-watch(() => props.isOpen, (isOpen) => {
-  if (isOpen) {
+watch(() => props.isOpen, (open) => {
+  if (open) {
     selectedProfileId.value = props.activeProfileId
-    updateSelectedKeypoints()
+    loadKeypointsForProfile()
   }
 })
 
-// Watch for profile selection changes in the dropdown
 watch(selectedProfileId, () => {
-  updateSelectedKeypoints()
+  loadKeypointsForProfile()
 })
 
-// Initialize on mount
-updateSelectedKeypoints()
+// Initialize
+loadKeypointsForProfile()
 </script>
 
 <style scoped>
+/* ── Overlay ──────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   backdrop-filter: blur(2px);
+  padding: 24px;
 }
 
+/* ── Modal shell ──────────────────────────────────────────── */
 .modal-content {
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  width: 90%;
-  max-width: 640px;
-  max-height: 80vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow-overlay);
-}
-
-.settings-modal {
+  width: 780px;
+  max-width: 96vw;
+  max-height: 88vh;
   display: flex;
   flex-direction: column;
+  box-shadow: var(--shadow-overlay);
+  overflow: hidden;
 }
 
+/* ── Header ───────────────────────────────────────────────── */
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--sp-16);
+  padding: 14px 20px;
   border-bottom: 1px solid var(--border-default);
+  background: var(--bg-panel-header);
+  flex-shrink: 0;
 }
 
 .modal-header h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
-}
-
-.modal-body {
-  padding: var(--sp-16);
-  flex: 1;
-  overflow-y: auto;
-}
-
-.modal-footer {
-  display: flex;
-  gap: var(--sp-8);
-  justify-content: flex-end;
-  padding: var(--sp-12) var(--sp-16);
-  border-top: 1px solid var(--border-default);
-}
-
-.settings-section {
-  margin-bottom: 20px;
-}
-
-.settings-section h3 {
-  margin: 0 0 var(--sp-8) 0;
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-}
-
-.form-select,
-.form-input {
-  width: 100%;
-  padding: 6px 10px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  font-size: var(--fs-sm);
-  font-family: var(--font-sans);
-  margin-bottom: var(--sp-8);
-  background: var(--bg-canvas);
-  color: var(--text-primary);
-}
-
-.form-select:focus,
-.form-input:focus {
-  outline: none;
-  border-color: var(--accent-blue);
-  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.15);
-}
-
-.keypoint-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: var(--sp-4);
-}
-
-.keypoint-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  padding: 5px var(--sp-8);
-  border-radius: var(--radius-sm);
-  transition: background 0.12s;
-  font-size: var(--fs-sm);
-  color: var(--text-secondary);
-}
-
-.keypoint-checkbox:hover {
-  background: var(--bg-overlay);
-}
-
-.keypoint-checkbox input {
-  cursor: pointer;
-  accent-color: var(--accent-blue);
-}
-
-.profile-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-8);
-  margin-bottom: var(--sp-12);
-}
-
-.profile-list {
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.profile-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--sp-8) var(--sp-12);
-  border-bottom: 1px solid var(--border-muted);
-}
-
-.profile-item:last-child {
-  border-bottom: none;
-}
-
-.profile-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
-}
-
-.profile-header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--sp-12);
-}
-
-.profile-header-row strong {
-  color: var(--text-primary);
-  font-size: var(--fs-sm);
-}
-
-.toggle-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  font-size: var(--fs-xs);
-  color: var(--text-secondary);
-}
-
-.toggle-label input {
-  cursor: pointer;
-  accent-color: var(--accent-blue);
-}
-
-.profile-folder {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-}
-
-.profile-info small {
-  color: var(--text-muted);
-  font-size: var(--fs-xs);
 }
 
 .close-btn {
@@ -387,68 +297,335 @@ updateSelectedKeypoints()
   font-size: 18px;
   cursor: pointer;
   color: var(--text-muted);
-  padding: 0;
   width: 28px;
   height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
-  transition: color 0.12s, background 0.12s;
+  transition: color 0.1s, background 0.1s;
+}
+.close-btn:hover { color: var(--text-primary); background: var(--bg-canvas); }
+
+/* ── Two-column body ──────────────────────────────────────── */
+.modal-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
 }
 
-.close-btn:hover {
+.col-left {
+  width: 280px;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--border-muted);
+}
+
+.col-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.col-divider { display: none; } /* handled by border */
+
+.col-section {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-muted);
+}
+
+.col-section:last-child { border-bottom: none; }
+
+.col-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.col-section-sub {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-secondary);
+}
+
+/* ── Profile list ─────────────────────────────────────────── */
+.col-left .col-section:first-child {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.profile-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--border-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 0.1s;
+}
+.profile-item:last-child { border-bottom: none; }
+.profile-item:hover { background: var(--bg-canvas); }
+.profile-item.profile-active { background: var(--accent-blue-bg); }
+
+.profile-radio { padding-top: 2px; }
+
+.radio-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--border-default);
+  background: var(--bg-surface);
+  flex-shrink: 0;
+  transition: border-color 0.1s, background 0.1s;
+}
+.radio-dot.active {
+  border-color: var(--accent-blue);
+  background: var(--accent-blue);
+  box-shadow: 0 0 0 2px var(--accent-blue-bg);
+}
+
+.profile-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.profile-name {
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-primary);
-  background: var(--bg-overlay);
 }
 
-.btn {
+.badge-active {
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--accent-blue);
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 10px;
+  letter-spacing: 0.03em;
+}
+
+.profile-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.profile-path {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-actions {
+  flex-shrink: 0;
+}
+
+.btn-icon-danger {
+  width: 22px;
+  height: 22px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.1s, background 0.1s, border-color 0.1s;
+  line-height: 1;
+}
+.btn-icon-danger:hover {
+  color: var(--accent-red);
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+/* ── Create form ──────────────────────────────────────────── */
+.create-section {
+  flex-shrink: 0;
+}
+
+.create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  transition: border-color 0.1s;
+}
+.form-input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px var(--accent-blue-bg);
+}
+
+.btn-create {
+  align-self: flex-start;
   padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  background: var(--accent-blue);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.btn-create:hover { background: #2560d4; }
+
+/* ── Keypoint scroll area ─────────────────────────────────── */
+.keypoint-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 10px 0;
+}
+
+.keypoint-scroll {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-md);
+  background: var(--bg-canvas);
+  padding: 4px 0;
+}
+
+.keypoint-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.08s;
+  border-radius: 0;
+}
+.keypoint-row:hover { background: var(--bg-surface); }
+.keypoint-row.kp-checked { background: var(--accent-blue-bg); }
+.keypoint-row.kp-checked:hover { background: #dbeafe; }
+
+.keypoint-row input[type="checkbox"] {
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: var(--accent-blue);
+  width: 14px;
+  height: 14px;
+}
+
+.kp-num {
+  width: 22px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.kp-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex: 1;
+  line-height: 1.4;
+}
+
+.keypoint-row.kp-checked .kp-label {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.kp-summary {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding-top: 6px;
+  text-align: right;
+}
+
+/* ── Footer ───────────────────────────────────────────────── */
+.modal-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-panel-header);
+  flex-shrink: 0;
+}
+
+/* ── Buttons ──────────────────────────────────────────────── */
+.btn {
+  padding: 6px 14px;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
-  font-size: var(--fs-sm);
+  font-size: 13px;
+  font-weight: 500;
   font-family: var(--font-sans);
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
-  line-height: 20px;
+  transition: background 0.1s;
 }
 
 .btn-primary {
   background: var(--accent-blue);
-  color: var(--text-on-emphasis);
+  color: #fff;
 }
-
-.btn-primary:hover {
-  background: #4c9aed;
-}
+.btn-primary:hover { background: #2560d4; }
 
 .btn-secondary {
-  background: var(--bg-overlay);
+  background: var(--bg-surface-raised);
   color: var(--text-primary);
   border-color: var(--border-default);
 }
+.btn-secondary:hover { background: var(--bg-canvas); }
 
-.btn-secondary:hover {
-  background: var(--bg-surface-raised);
-}
-
-.btn-danger {
-  background: rgba(248, 81, 73, 0.15);
-  color: var(--accent-red);
-  border-color: rgba(248, 81, 73, 0.3);
-}
-
-.btn-danger:hover {
-  background: rgba(248, 81, 73, 0.25);
-}
-
-.btn-sm {
-  padding: 2px 8px;
-  font-size: var(--fs-xs);
-}
-
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+/* ── Scrollbars ───────────────────────────────────────────── */
+.profile-list::-webkit-scrollbar,
+.keypoint-scroll::-webkit-scrollbar { width: 6px; }
+.profile-list::-webkit-scrollbar-track,
+.keypoint-scroll::-webkit-scrollbar-track { background: transparent; }
+.profile-list::-webkit-scrollbar-thumb,
+.keypoint-scroll::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 3px; }
 </style>

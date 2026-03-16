@@ -20,7 +20,8 @@ export interface PredictionResult {
     phenotypes: Phenotype[]
   }
   overlay_path?: string
-  overlay_png_base64?: string
+  overlay_preview_base64?: string
+  overlay_thumbnail_base64?: string
 }
 
 export interface BatchResult {

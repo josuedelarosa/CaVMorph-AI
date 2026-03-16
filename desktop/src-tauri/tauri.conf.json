@@ -39,6 +39,10 @@
         "exists": true,
         "scope": ["$APPCONFIG", "$APPCONFIG/**", "$APPDATA", "$APPDATA/**", "$DOWNLOADS", "$DOWNLOADS/**", "$HOME", "$HOME/**"]
       },
+      "protocol": {
+        "asset": true,
+        "assetScope": ["$HOME/**", "$APPDATA/**", "$APPCONFIG/**"]
+      },
       "path": {
         "all": true
       }

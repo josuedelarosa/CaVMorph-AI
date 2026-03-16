@@ -94,7 +94,7 @@
             <div class="progress-bar-sm">
               <div class="progress-fill-sm" :style="{ width: progressPercent + '%' }"></div>
             </div>
-            <span class="progress-label">{{ processedCount }} / {{ totalCount }} images</span>
+            <span class="progress-label">{{ totalCount > 0 ? processedCount + ' / ' + totalCount + ' images' : 'Processing…' }}</span>
             <span v-if="currentProcessingFile" class="progress-file">
               {{ currentProcessingFile.split('/').pop() }}
             </span>
@@ -193,8 +193,8 @@
                 :title="getFilename(pred.image_path)"
               >
                 <img
-                  v-if="pred.overlay_png_base64"
-                  :src="'data:image/png;base64,' + pred.overlay_png_base64"
+                  v-if="pred.overlay_thumbnail_base64"
+                  :src="'data:image/jpeg;base64,' + pred.overlay_thumbnail_base64"
                   class="thumb-img"
                   @error="(e) => ((e.target as HTMLImageElement).style.display = 'none')"
                 />
@@ -219,7 +219,13 @@
                 >{{ focusMode ? '▲' : '▼' }}</button>
               </div>
               <div class="canvas-wrap" v-if="selectedPrediction">
-                <canvas ref="previewCanvas" class="preview-canvas"></canvas>
+                <img
+                  v-if="selectedPrediction.overlay_preview_base64"
+                  :key="selectedPredictionIdx"
+                  :src="'data:image/jpeg;base64,' + selectedPrediction.overlay_preview_base64"
+                  class="preview-img"
+                />
+                <canvas v-else ref="previewCanvas" class="preview-canvas"></canvas>
               </div>
               <div class="canvas-empty" v-else>
                 Select a specimen to preview
@@ -295,7 +301,7 @@
         <span class="status-message">
           {{
             isAnalyzing
-              ? `Analyzing ${processedCount}/${totalCount}…`
+              ? (totalCount > 0 ? `Analyzing ${processedCount}/${totalCount}…` : 'Analyzing…')
               : `Backend: ${backendStatusText}`
           }}
         </span>
@@ -355,7 +361,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { invoke, convertFileSrc } from '@tauri-apps/api/tauri'
 import { open } from '@tauri-apps/api/dialog'
 import { readBinaryFile } from '@tauri-apps/api/fs'
@@ -627,7 +633,7 @@ function getPhenotypeValue(pred: PredictionResult, phenotypeName: string): strin
   const phenos = pred.extra_pred_fields?.phenotypes || []
   const pheno = phenos.find(p => p.name === phenotypeName)
   if (!pheno) return '-'
-  const value = pheno.value_norm ?? pheno.value_px
+  const value = pheno.value_px
   return typeof value === 'number' ? value.toFixed(2) : '-'
 }
 
@@ -874,6 +880,8 @@ function clearResults() {
 }
 
 function drawPreview() {
+  // overlay_preview_base64 → the <img> element handles it reactively, no canvas needed.
+  if (selectedPrediction.value?.overlay_preview_base64) return
   if (!previewCanvas.value || !selectedPrediction.value) return
 
   const canvas = previewCanvas.value
@@ -881,35 +889,28 @@ function drawPreview() {
   const ctx = canvas.getContext('2d')
   if (!ctx) return
 
-  // Get canvas container dimensions
   const rect = canvas.getBoundingClientRect()
   const dpr = window.devicePixelRatio || 1
-  
-  // Use container size for display
   const displayWidth = Math.max(rect.width || 800, 800)
   const displayHeight = Math.max(rect.height || 600, 600)
-  
   canvas.width = displayWidth * dpr
   canvas.height = displayHeight * dpr
   canvas.style.width = displayWidth + 'px'
   canvas.style.height = displayHeight + 'px'
-  
   ctx.scale(dpr, dpr)
 
-  // Shared draw callback once an image is loaded
   function drawLoadedImage(img: HTMLImageElement) {
-    const displayWidth = canvas.width / dpr
-    const displayHeight = canvas.height / dpr
-    const scale = Math.min(displayWidth / img.width, displayHeight / img.height)
-    const scaledWidth = img.width * scale
-    const scaledHeight = img.height * scale
-    const offsetX = (displayWidth - scaledWidth) / 2
-    const offsetY = (displayHeight - scaledHeight) / 2
-
+    const w = canvas.width / dpr
+    const h = canvas.height / dpr
+    const scale = Math.min(w / img.width, h / img.height)
+    const sw = img.width * scale
+    const sh = img.height * scale
+    const ox = (w - sw) / 2
+    const oy = (h - sh) / 2
     ctx.fillStyle = '#F5F6F8'
-    ctx.fillRect(0, 0, displayWidth, displayHeight)
-    ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight)
-    drawKeypointsOnCanvas(ctx, pred, canvas, img, scale, offsetX, offsetY, dpr)
+    ctx.fillRect(0, 0, w, h)
+    ctx.drawImage(img, ox, oy, sw, sh)
+    drawKeypointsOnCanvas(ctx, pred, canvas, img, scale, ox, oy, dpr)
   }
 
   function drawFallbackGray() {
@@ -918,38 +919,14 @@ function drawPreview() {
     drawKeypointsOnCanvas(ctx, pred, canvas, null, 1, 0, 0, dpr)
   }
 
-  // Fast path: use overlay_png_base64 (already in memory, no disk I/O)
-  if (pred.overlay_png_base64) {
-    const img = new Image()
-    img.onload = () => drawLoadedImage(img)
-    img.onerror = () => {
-      // If base64 decoding fails, fall back to file path
-      loadImageFromFile()
-    }
-    img.src = 'data:image/png;base64,' + pred.overlay_png_base64
-    return
-  }
+  // Load original image from disk and draw keypoints on canvas
+  const imagePath = pred.image_path
+  if (!imagePath) { drawFallbackGray(); return }
 
-  // Slow path: read image from file system
-  function loadImageFromFile() {
-    const imagePath = pred.image_path
-    if (!imagePath) { drawFallbackGray(); return }
-
-    const img = new Image()
-    readBinaryFile(imagePath)
-      .then((data) => {
-        const ext = imagePath.toLowerCase().split('.').pop()
-        const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg'
-        const blob = new Blob([data], { type: mimeType })
-        img.src = URL.createObjectURL(blob)
-      })
-      .catch(() => drawFallbackGray())
-
-    img.onload = () => drawLoadedImage(img)
-    img.onerror = () => drawFallbackGray()
-  }
-
-  loadImageFromFile()
+  const img = new Image()
+  img.onload = () => drawLoadedImage(img)
+  img.onerror = () => drawFallbackGray()
+  img.src = convertFileSrc(imagePath)
 }
 
 function drawKeypointsOnCanvas(
@@ -1050,6 +1027,9 @@ function drawKeypointsOnCanvas(
   }
 }
 
+// Track retry timer so it can be cancelled on unmount
+let _retryTimer: ReturnType<typeof setTimeout> | null = null
+
 async function initializeBackend() {
   const maxRetries = 12  // 12 * 2s = 24 seconds max wait
   let retries = 0
@@ -1089,7 +1069,7 @@ async function initializeBackend() {
       if (retries < maxRetries) {
         // Still waiting for backend to start - retry in 2 seconds
         errorMessage.value = `Connecting... (${retries}/${maxRetries}) ${errorDetails}`
-        setTimeout(attemptConnection, 2000)
+        _retryTimer = window.setTimeout(attemptConnection, 2000)
       } else {
         // Max retries reached - show error
         console.error('Failed to connect to backend after max retries:', err)
@@ -1097,7 +1077,7 @@ async function initializeBackend() {
         state.value = 'idle'
         backendReady.value = false
         // Try one more time after 10 seconds in case backend is slow
-        setTimeout(attemptConnection, 10000)
+        _retryTimer = window.setTimeout(attemptConnection, 10000)
       }
     }
   }
@@ -1402,6 +1382,10 @@ onMounted(async () => {
       }
     }, 1000)
   }
+})
+
+onBeforeUnmount(() => {
+  if (_retryTimer !== null) { clearTimeout(_retryTimer); _retryTimer = null }
 })
 
 watch(() => selectedPredictionIdx.value, async () => {
