@@ -1,290 +1,329 @@
 <template>
   <!-- First Run Setup View -->
-  <SetupView 
-    v-if="needsSetup" 
+  <SetupView
+    v-if="needsSetup"
     @setup-complete="onSetupComplete"
     @setup-error="onSetupError"
   />
-  
-  <!-- Main App (shown after setup is complete) -->
-  <div v-else id="app-container" :class="{ dark: isDarkMode }">
-    <!-- Header -->
+
+  <!-- Main App -->
+  <div v-else id="app-container">
+
+    <!-- ─── Header ──────────────────────────────────────────────── -->
     <header class="app-header">
-      <div class="header-content">
-        <div class="header-title">
-          <svg class="fish-logo" viewBox="0 0 24 24" width="32" height="32">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z" fill="currentColor"/>
-            <circle cx="12" cy="12" r="3" fill="currentColor"/>
-          </svg>
-          <h1>PhenoAI</h1>
-        </div>
-        <div class="header-actions">
-          <button class="icon-btn" @click="showDebugConsole = !showDebugConsole" title="Toggle Debug Console">
-            {{ showDebugConsole ? '📋' : '🔍' }}
-          </button>
-          <button class="icon-btn" @click="showSettings = true" title="Profile settings">
-            ⚙️
-          </button>
-          <button class="icon-btn" @click="toggleDarkMode" title="Toggle dark mode">
-            <span v-if="isDarkMode">☀️</span>
-            <span v-else>🌙</span>
-          </button>
-        </div>
+      <div class="header-brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <ellipse cx="12" cy="12" rx="9" ry="5.5"/>
+          <circle cx="8.5" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+          <path d="M21 12c-2-3-5-5.5-9-5.5" stroke-dasharray="2.5 1.5" stroke-linecap="round"/>
+        </svg>
+        <span class="brand-name">PhenoAI</span>
+      </div>
+      <div class="header-actions">
+        <button class="btn-header" @click="showSettings = true">Settings</button>
+        <button class="btn-header" @click="showWelcome = true">Help</button>
       </div>
     </header>
 
-    <!-- Debug Console -->
-    <div v-if="showDebugConsole" class="debug-console">
-      <div class="debug-header">
-        <strong>🔍 Debug Console</strong>
-        <div>
-          <button @click="debugLogs = []" class="btn-sm">Clear</button>
-          <button @click="showDebugConsole = false" class="btn-sm">Close</button>
-        </div>
-      </div>
-      <div class="debug-content">
-        <div v-for="(log, idx) in debugLogs.slice(-100)" :key="idx" class="debug-log" :class="log.level">
-          <span class="log-time">{{ log.time }}</span>
-          <span class="log-message">{{ log.message }}</span>
-        </div>
-        <div v-if="debugLogs.length === 0" class="debug-empty">No logs yet</div>
-      </div>
-    </div>
+    <!-- ─── App Body: Left Panel + Workspace ─────────────────── -->
+    <div class="app-body">
 
-    <!-- Main Content -->
-    <main class="app-main">
-      <div class="container">
-        <!-- Error Banner -->
-        <div v-if="errorMessage" class="error-banner">
-          <span>⚠️ {{ errorMessage }}</span>
-          <button class="close-btn" @click="errorMessage = ''">×</button>
+      <!-- Left Control Panel ─────────────────────────────────── -->
+      <aside class="left-panel">
+
+        <!-- Banners -->
+        <div v-if="errorMessage" class="panel-alert panel-alert-error">
+          <span>{{ errorMessage }}</span>
+          <button @click="errorMessage = ''">×</button>
+        </div>
+        <div v-if="infoMessage" class="panel-alert panel-alert-info">
+          <span>{{ infoMessage }}</span>
+          <button @click="infoMessage = ''">×</button>
         </div>
 
-        <!-- Info Banner -->
-        <div v-if="infoMessage" class="info-banner">
-          <span>ℹ️ {{ infoMessage }}</span>
-          <button class="close-btn" @click="infoMessage = ''">×</button>
-        </div>
-
-        <!-- Loading State -->
-        <div v-if="state === 'loading' && !predictions.length" class="loading-overlay">
-          <div class="spinner"></div>
-          <p>Initializing backend...</p>
-        </div>
-
-        <!-- Analysis Controls -->
-        <section v-if="state !== 'loading' || predictions.length" class="control-section">
-          <h2>1. Select Images</h2>
-          
-          <!-- Show warning if no active profiles -->
-          <div v-if="activeProfiles.length === 0" class="warning-message">
-            <p>⚠️ No active profiles configured. Go to Settings (⚙️) to create or enable a profile.</p>
+        <!-- Dataset ──────────────────────────────────────────── -->
+        <div class="panel-section">
+          <div class="panel-section-title">Dataset</div>
+          <div v-if="activeProfiles.length === 0" class="panel-note">
+            No active profiles. Open
+            <a href="#" @click.prevent="showSettings = true">Settings</a>
+            to configure.
           </div>
-          
-          <div v-else class="profiles-group">
-            <div v-for="profile in activeProfiles" :key="profile.id" class="profile-folder-item">
-              <div class="profile-header">
-                <span class="profile-name">{{ profile.name }}</span>
-                <span class="keypoint-badge">{{ profile.selected_keypoints.length }}/20 keypoints</span>
-              </div>
-              <div class="control-group">
-                <button class="btn btn-primary" @click="selectFolderForProfile(profile.id)" :disabled="isAnalyzing">
-                  📁 Select Folder
-                </button>
-                <span v-if="profile.folder_path" class="selected-path">{{ profile.folder_path }}</span>
-                <span v-else class="text-muted">No folder selected</span>
-                <button 
-                  v-if="profile.folder_path" 
-                  class="btn btn-icon"
-                  @click="clearFolderForProfile(profile.id)"
-                  title="Clear selection"
-                >
-                  ✕
-                </button>
-              </div>
+          <div
+            v-else
+            v-for="profile in activeProfiles"
+            :key="profile.id"
+            class="dataset-row"
+          >
+            <div class="dataset-label">
+              <span class="dataset-name">{{ profile.name }}</span>
+              <span class="dataset-meta">{{ profile.selected_keypoints.length }} landmarks</span>
+            </div>
+            <div class="path-row">
+              <span class="path-text" :title="profile.folder_path">
+                {{
+                  profile.folder_path
+                    ? (profile.folder_path.split('/').pop() || profile.folder_path)
+                    : 'No folder selected'
+                }}
+              </span>
+              <button
+                class="btn-xs btn-outline"
+                @click="selectFolderForProfile(profile.id)"
+                :disabled="isAnalyzing"
+              >Browse</button>
+              <button
+                v-if="profile.folder_path"
+                class="btn-xs btn-ghost"
+                @click="clearFolderForProfile(profile.id)"
+                title="Clear"
+              >×</button>
             </div>
           </div>
-        </section>
+        </div>
 
-        <!-- Analysis Button -->
-        <section v-if="hasActiveFoldersSelected && state !== 'analyzing'" class="control-section">
-          <h2>2. Analyze</h2>
-          <button 
-            class="btn btn-primary" 
+        <!-- Analysis ─────────────────────────────────────────── -->
+        <div class="panel-section">
+          <div class="panel-section-title">Analysis</div>
+          <button
+            class="btn-run"
             @click="startAnalysis"
-            :disabled="isAnalyzing"
-          >
-            🔬 Analyze Images
-          </button>
-        </section>
+            :disabled="!hasActiveFoldersSelected || isAnalyzing"
+          >{{ isAnalyzing ? 'Running…' : 'Run Analysis' }}</button>
+          <div v-if="isAnalyzing" class="analysis-status">
+            <div class="progress-bar-sm">
+              <div class="progress-fill-sm" :style="{ width: progressPercent + '%' }"></div>
+            </div>
+            <span class="progress-label">{{ processedCount }} / {{ totalCount }} images</span>
+            <span v-if="currentProcessingFile" class="progress-file">
+              {{ currentProcessingFile.split('/').pop() }}
+            </span>
+          </div>
+        </div>
 
-        <!-- Progress -->
-        <div v-if="isAnalyzing" class="progress-section">
-          <div class="progress-header">
-            <div>
-              <span>Processing: {{ processedCount }} / {{ totalCount }} images</span>
-              <span class="time-est" v-if="totalCount > 0">
-                ~{{ estimatedTimeRemaining }}s remaining
+        <!-- Results (visible once there are predictions) ─────── -->
+        <template v-if="predictions.length">
+          <div class="panel-section">
+            <div class="panel-section-title">Results</div>
+            <div class="summary-grid">
+              <div class="summary-item">
+                <span class="summary-label">Specimens</span>
+                <span class="summary-value">{{ filteredPredictions.length }}</span>
+              </div>
+              <div class="summary-item" v-if="selectedPrediction">
+                <span class="summary-label">Landmarks</span>
+                <span class="summary-value">{{ keypointCount }}/20</span>
+              </div>
+              <div class="summary-item" v-if="selectedPrediction">
+                <span class="summary-label">Confidence</span>
+                <span class="summary-value">{{ avgConfidence }}%</span>
+              </div>
+              <div class="summary-item" v-if="selectedPrediction">
+                <span class="summary-label">Measures</span>
+                <span class="summary-value">{{ phenotypeCount }}</span>
+              </div>
+            </div>
+            <select
+              v-if="activeProfiles.length > 1"
+              v-model="selectedProfileFilter"
+              class="field-select"
+            >
+              <option value="">All profiles</option>
+              <option
+                v-for="p in activeProfiles"
+                :key="p.id"
+                :value="p.id"
+              >{{ p.name }}</option>
+            </select>
+          </div>
+
+          <div class="panel-section">
+            <div class="panel-section-title">Export</div>
+            <div class="export-btns">
+              <button class="btn-sm btn-outline" @click="exportResults('csv')">CSV</button>
+              <button class="btn-sm btn-outline" @click="exportResults('json')">JSON</button>
+              <button class="btn-sm btn-outline" @click="exportResults('images')">Images</button>
+            </div>
+            <button class="btn-text-danger" @click="clearResults">Clear results</button>
+          </div>
+        </template>
+
+      </aside>
+
+      <!-- Workspace ──────────────────────────────────────────── -->
+      <main class="workspace">
+
+        <!-- Connecting -->
+        <div v-if="state === 'loading' && !predictions.length" class="workspace-loading">
+          <div class="spinner"></div>
+          <span>Connecting to backend…</span>
+        </div>
+
+        <!-- Getting Started (empty state) -->
+        <div
+          v-if="!predictions.length && !isAnalyzing && state !== 'loading'"
+          class="workspace-empty"
+        >
+          <div class="getting-started">
+            <div class="gs-title">Getting Started</div>
+            <ol class="gs-steps">
+              <li>Select or create a <strong>Profile</strong> in Settings</li>
+              <li>Click <strong>Browse</strong> to choose an image folder</li>
+              <li>Click <strong>Run Analysis</strong></li>
+              <li>Review results and export data</li>
+            </ol>
+            <div class="gs-formats">Supported formats: JPEG · PNG · BMP · TIFF</div>
+          </div>
+        </div>
+
+        <!-- Results workspace ──────────────────────────────── -->
+        <div v-if="predictions.length" class="workspace-content">
+
+          <!-- Viewer row: thumbnail strip + canvas -->
+          <div class="viewer-row">
+
+            <!-- Thumbnail strip -->
+            <div class="thumb-strip">
+              <button
+                v-for="(pred, idx) in filteredPredictions"
+                :key="idx"
+                class="thumb-item"
+                :class="{ active: selectedPredictionIdx === idx }"
+                @click="selectPredictionFromFiltered(idx, pred)"
+                :title="getFilename(pred.image_path)"
+              >
+                <img
+                  v-if="pred.overlay_png_base64"
+                  :src="'data:image/png;base64,' + pred.overlay_png_base64"
+                  class="thumb-img"
+                  @error="(e) => ((e.target as HTMLImageElement).style.display = 'none')"
+                />
+                <span v-else class="thumb-num">{{ idx + 1 }}</span>
+              </button>
+            </div>
+
+            <!-- Image viewer -->
+            <div class="image-viewer">
+              <div class="viewer-bar">
+                <span class="viewer-filename">
+                  {{
+                    selectedPrediction
+                      ? getFilename(selectedPrediction.image_path)
+                      : 'Select a specimen'
+                  }}
+                </span>
+                <button
+                  class="btn-xs btn-ghost"
+                  @click="focusMode = !focusMode"
+                  :title="focusMode ? 'Collapse viewer' : 'Expand viewer'"
+                >{{ focusMode ? '▲' : '▼' }}</button>
+              </div>
+              <div class="canvas-wrap" v-if="selectedPrediction">
+                <canvas ref="previewCanvas" class="preview-canvas"></canvas>
+              </div>
+              <div class="canvas-empty" v-else>
+                Select a specimen to preview
+              </div>
+            </div>
+
+          </div><!-- /.viewer-row -->
+
+          <!-- Measurements table -->
+          <div class="measurements-panel">
+            <div class="measurements-bar">
+              <span class="measurements-title">Measurements</span>
+              <span class="measurements-count">
+                {{ filteredPredictions.length }} specimens
+                <template v-if="allPhenotypeKeys.length">
+                  &nbsp;·&nbsp;{{ allPhenotypeKeys.length }} variables
+                </template>
               </span>
             </div>
-            <div class="current-file" v-if="currentProcessingFile">
-              📄 {{ currentProcessingFile }}
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th class="th-specimen">Specimen</th>
+                    <th class="th-num">Landmarks</th>
+                    <th class="th-num">Confidence</th>
+                    <th
+                      v-for="key in allPhenotypeKeys"
+                      :key="key"
+                      class="th-measure"
+                    >{{ key }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(pred, idx) in filteredPredictions"
+                    :key="idx"
+                    :class="{ 'row-selected': selectedPredictionIdx === idx }"
+                    @click="selectPredictionFromFiltered(idx, pred)"
+                  >
+                    <td class="td-specimen">{{ getFilename(pred.image_path) }}</td>
+                    <td class="td-num">{{ getKeypointCount(pred) }}/20</td>
+                    <td class="td-num">{{ getAvgConfidence(pred) }}%</td>
+                    <td
+                      v-for="key in allPhenotypeKeys"
+                      :key="key"
+                      class="td-measure"
+                    >{{ getPhenotypeValue(pred, key) }}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-          </div>
-          <div class="progress-bar">
-            <div 
-              class="progress-fill" 
-              :style="{ width: progressPercent + '%' }"
-            ></div>
+          </div><!-- /.measurements-panel -->
+
+        </div><!-- /.workspace-content -->
+
+      </main><!-- /.workspace -->
+
+    </div><!-- /.app-body -->
+
+    <!-- ─── Status / Log Bar ────────────────────────────────── -->
+    <div class="status-bar" :class="{ 'status-expanded': showDebugConsole }">
+      <template v-if="!showDebugConsole">
+        <span class="status-indicator" :class="backendStatus"></span>
+        <span class="status-message">
+          {{
+            isAnalyzing
+              ? `Analyzing ${processedCount}/${totalCount}…`
+              : `Backend: ${backendStatusText}`
+          }}
+        </span>
+        <button
+          v-if="debugLogs.length"
+          class="status-log-btn"
+          @click="showDebugConsole = true"
+        >Show log</button>
+      </template>
+      <template v-else>
+        <div class="log-panel-header">
+          <span>Log</span>
+          <div>
+            <button class="btn-xs btn-ghost" @click="debugLogs = []">Clear</button>
+            <button class="btn-xs btn-ghost" @click="showDebugConsole = false">Close</button>
           </div>
         </div>
-
-        <!-- Results Section -->
-        <section v-if="predictions.length" class="results-section">
-          <div class="results-header">
-            <div class="header-left">
-              <h2>📊 Results ({{ predictions.length }} images)</h2>
-              <select v-if="activeProfiles.length > 1" v-model="selectedProfileFilter" class="profile-selector">
-                <option value="">All Profiles</option>
-                <option v-for="profile in activeProfiles" :key="profile.id" :value="profile.id">
-                  {{ profile.name }}
-                </option>
-              </select>
-            </div>
-            <div class="results-actions">
-              <button class="btn btn-secondary" @click="exportResults('csv')">
-                📥 Export CSV
-              </button>
-              <button class="btn btn-secondary" @click="exportResults('json')">
-                📥 Export JSON
-              </button>
-              <button class="btn btn-secondary" @click="exportResults('images')">
-                📥 Export Images
-              </button>
-              <button class="btn btn-secondary" @click="clearResults">
-                🗑️ Clear
-              </button>
-            </div>
+        <div class="log-panel-body">
+          <div
+            v-for="(log, idx) in debugLogs.slice(-100)"
+            :key="idx"
+            class="log-entry"
+            :class="log.level"
+          >
+            <span class="log-time">{{ log.time }}</span>
+            <span>{{ log.message }}</span>
           </div>
-
-          <!-- 3-Column Layout: Canvas (left) | Details (middle) | Preview List (right) -->
-          <div class="results-layout-2col" :class="{ 'focus-mode': focusMode }">
-            <!-- Main: Large Preview -->
-            <div class="main-preview">
-              <div class="preview-header">
-                <div class="preview-title" v-if="selectedPrediction">
-                  {{ getFilename(selectedPrediction.image_path) }}
-                </div>
-                <button class="btn-icon" @click="focusMode = !focusMode" :title="focusMode ? 'Show sidebar' : 'Focus mode'">
-                  {{ focusMode ? '⬅️' : '⬆️' }}
-                </button>
-              </div>
-              <div v-if="selectedPrediction" class="canvas-container">
-                <canvas 
-                  ref="previewCanvas"
-                  class="preview-canvas"
-                ></canvas>
-              </div>
-              <div v-else class="empty-canvas">
-                <p>Select an image to view</p>
-              </div>
-              <div class="preview-footer" v-if="selectedPrediction">
-                <div class="metric-inline">
-                  <span class="metric-label">Keypoints:</span>
-                  <span class="metric-value">{{ keypointCount }}/20</span>
-                </div>
-                <div class="metric-inline">
-                  <span class="metric-label">Confidence:</span>
-                  <span class="metric-value">{{ avgConfidence }}%</span>
-                </div>
-                <div class="metric-inline">
-                  <span class="metric-label">Phenotypes:</span>
-                  <span class="metric-value">{{ phenotypeCount }}</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Sidebar: Image List -->
-            <div class="sidebar" v-if="!focusMode">
-              <div class="sidebar-header">
-                <h4>Images ({{ filteredPredictions.length }})</h4>
-              </div>
-              <div class="image-grid">
-                <button 
-                  v-for="(pred, idx) in filteredPredictions" 
-                  :key="idx"
-                  class="image-thumb"
-                  :class="{ active: selectedPredictionIdx === idx }"
-                  @click="selectPredictionFromFiltered(idx, pred)"
-                  :title="getFilename(pred.image_path)"
-                >
-                  <div class="thumb-placeholder">
-                    <!-- Use overlay_png_base64 for instant loading (shows all keypoints but loads fast) -->
-                    <img 
-                      v-if="pred.overlay_png_base64"
-                      :src="'data:image/png;base64,' + pred.overlay_png_base64"
-                      alt="Thumbnail"
-                      class="thumb-image"
-                      @error="(e) => (e.target as HTMLImageElement).style.display = 'none'"
-                    />
-                    <span v-else class="thumb-number">{{ idx + 1 }}</span>
-                  </div>
-                  <div class="thumb-info">
-                    <div class="thumb-name">{{ getFilename(pred.image_path).substring(0, 20) }}{{ getFilename(pred.image_path).length > 20 ? '...' : '' }}</div>
-                    <div class="thumb-meta">
-                      {{ getKeypointCount(pred) }}/20 • {{ getAvgConfidence(pred) }}% • {{ getPhenotypeCount(pred) }}p
-                    </div>
-                  </div>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Phenotype Table: Full Width Below -->
-          <div v-if="selectedPrediction" class="phenotype-section">
-            <div class="phenotype-header">
-              <h4>Measurements</h4>
-            </div>
-            <div class="table-compact">
-              <div v-for="(value, key) in filteredPhenotypeValues" :key="key" class="table-row">
-                <span class="table-key">{{ key }}</span>
-                <span class="table-value">{{ value }}</span>
-              </div>
-            </div>
-          </div>
-
-
-        </section>
-
-        <!-- Empty State -->
-        <div v-if="!predictions.length && !isAnalyzing && state !== 'loading'" class="empty-state">
-          <svg class="empty-icon" viewBox="0 0 100 100">
-            <path d="M50 10 L60 30 L80 35 L70 50 L75 70 L55 60 L35 70 L40 50 L30 35 L50 30 Z" fill="none" stroke="currentColor" stroke-width="2"/>
-          </svg>
-          <h3>No results yet</h3>
-          <p>Select a folder of fish images and click "Analyze" to get started</p>
         </div>
-      </div>
-    </main>
-
-    <!-- Debug Console -->
-    <div v-if="showDebugConsole" class="debug-console">
-      <div class="debug-header">
-        <strong>Debug Console</strong>
-        <button @click="debugLogs = []" class="btn-sm">Clear</button>
-        <button @click="showDebugConsole = false" class="btn-sm">Close</button>
-      </div>
-      <div class="debug-content">
-        <div v-for="(log, idx) in debugLogs.slice(-100)" :key="idx" class="debug-log" :class="log.level">
-          <span class="log-time">{{ log.time }}</span>
-          <span class="log-message">{{ log.message }}</span>
-        </div>
-      </div>
+      </template>
     </div>
 
-    <!-- Footer -->
+    <!-- ─── Footer ──────────────────────────────────────────── -->
     <footer class="app-footer">
-      <p>PhenoAI v0.1.0 | Backend: <span :class="backendStatus">{{ backendStatusText }}</span></p>
+      <span>PhenoAI v0.1.0</span>
+      <span class="footer-sep">·</span>
+      <span>Backend: <span :class="backendStatus">{{ backendStatusText }}</span></span>
     </footer>
 
     <!-- Settings Modal -->
@@ -297,12 +336,13 @@
       @save="handleSettingsSave"
       @delete="handleDeleteProfile"
     />
-    
+
     <!-- Welcome Guide -->
     <WelcomeGuide
       :show="showWelcome"
       @close="showWelcome = false"
     />
+
   </div>
 </template>
 
@@ -454,6 +494,18 @@ function getAvgConfidence(pred: PredictionResult): string {
 function getPhenotypeCount(pred: PredictionResult): number {
   return pred.extra_pred_fields?.phenotypes?.length || 0
 }
+
+// All unique phenotype keys across the current filtered predictions (for table columns)
+const allPhenotypeKeys = computed(() => {
+  const keys: string[] = []
+  const seen = new Set<string>()
+  filteredPredictions.value.forEach(pred => {
+    pred.extra_pred_fields?.phenotypes?.forEach((p: any) => {
+      if (!seen.has(p.name)) { seen.add(p.name); keys.push(p.name) }
+    })
+  })
+  return keys
+})
 
 const keypointCount = computed(() => {
   if (!selectedPrediction.value) return 0
@@ -842,14 +894,14 @@ function drawPreview() {
     const offsetX = (displayWidth - scaledWidth) / 2
     const offsetY = (displayHeight - scaledHeight) / 2
 
-    ctx.fillStyle = '#f0f0f0'
+    ctx.fillStyle = '#F5F6F8'
     ctx.fillRect(0, 0, displayWidth, displayHeight)
     ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight)
     drawKeypointsOnCanvas(ctx, pred, canvas, img, scale, offsetX, offsetY, dpr)
   }
 
   function drawFallbackGray() {
-    ctx.fillStyle = '#f0f0f0'
+    ctx.fillStyle = '#F5F6F8'
     ctx.fillRect(0, 0, canvas.width / dpr, canvas.height / dpr)
     drawKeypointsOnCanvas(ctx, pred, canvas, null, 1, 0, 0, dpr)
   }
@@ -1029,7 +1081,7 @@ async function initializeBackend() {
       } else {
         // Max retries reached - show error
         console.error('Failed to connect to backend after max retries:', err)
-        errorMessage.value = `⚠️ Backend connection error: ${errorDetails}`
+        errorMessage.value = `Backend connection error: ${errorDetails}`
         state.value = 'idle'
         backendReady.value = false
         // Try one more time after 10 seconds in case backend is slow

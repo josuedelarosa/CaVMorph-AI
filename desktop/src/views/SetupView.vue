@@ -2,7 +2,6 @@
   <div class="setup-container">
     <div class="setup-card">
       <div class="header">
-        <div class="logo-icon">🐟</div>
         <h1>PhenoAI</h1>
         <p class="subtitle">First-time Setup</p>
       </div>
@@ -11,86 +10,71 @@
       <div v-if="!setupStarted && !setupComplete" class="choice-screen">
         <div class="choice-header">
           <h2>Environment Check</h2>
-          <p>PhenoAI needs a Python runtime and model files. In installer builds, Python can be bundled automatically.</p>
+          <p>Verifying Python runtime and model files.</p>
         </div>
 
         <div class="environment-check">
-          <!-- Python -->
           <div class="check-item" :class="pythonPath ? 'success' : 'warning'">
-            <span class="check-icon">{{ pythonPath ? '✓' : '✗' }}</span>
+            <span class="check-icon">{{ pythonPath ? '\u2713' : '\u2717' }}</span>
             <span v-if="pythonPath">Python found: {{ pythonPath }}</span>
-            <span v-else>Python runtime not found (bundled or system)</span>
+            <span v-else>Python runtime not found</span>
           </div>
-          <!-- Dependencies -->
           <div class="check-item" :class="depsInstalled ? 'success' : 'warning'" v-if="pythonPath">
-            <span class="check-icon">{{ depsInstalled ? '✓' : '⚠' }}</span>
+            <span class="check-icon">{{ depsInstalled ? '\u2713' : '\u2013' }}</span>
             <span v-if="depsInstalled">ONNX runtime packages installed</span>
             <span v-else>ONNX runtime packages need to be installed</span>
           </div>
-          <!-- Model -->
           <div class="check-item" :class="modelDir ? 'success' : 'warning'">
-            <span class="check-icon">{{ modelDir ? '✓' : '⚠' }}</span>
+            <span class="check-icon">{{ modelDir ? '\u2713' : '\u2013' }}</span>
             <span v-if="modelDir">Model files found</span>
             <span v-else>Model files not found</span>
           </div>
-          <!-- Runtime scripts -->
           <div class="check-item" :class="runtimeDir ? 'success' : 'warning'">
-            <span class="check-icon">{{ runtimeDir ? '✓' : '⚠' }}</span>
+            <span class="check-icon">{{ runtimeDir ? '\u2713' : '\u2013' }}</span>
             <span v-if="runtimeDir">Inference runtime found</span>
             <span v-else>Inference runtime files missing</span>
           </div>
         </div>
 
-        <!-- If everything is ready, offer to start immediately -->
         <div v-if="pythonPath && depsInstalled && modelDir && runtimeDir" class="all-ready">
-          <p class="ready-message">✅ Everything looks good!</p>
+          <p class="ready-message">All checks passed.</p>
           <button @click="startApp" class="btn-primary" :disabled="launchInProgress">
-            {{ launchInProgress ? 'Starting…' : 'Start Application' }}
+            {{ launchInProgress ? 'Starting\u2026' : 'Start Application' }}
           </button>
         </div>
 
-        <!-- If deps or venv are missing but Python + model OK -->
         <div v-else-if="pythonPath && modelDir && runtimeDir" class="needs-install">
-          <p class="info-message">Some dependencies need to be installed. This usually takes 1–2 minutes.</p>
+          <p class="info-message">Some dependencies need to be installed.</p>
           <button @click="runSetup" class="btn-primary">Install Dependencies</button>
         </div>
 
-        <!-- Runtime missing -->
         <div v-else-if="pythonPath && modelDir && !runtimeDir" class="needs-model">
           <div class="help-text">
-            <p><strong>Inference runtime files are missing from this installation.</strong>
-              This is not a Python dependency issue. Reinstall PhenoAI using the latest installer package,
-              then click Check Again.
-              <br>If this persists, click "View Full Logs" and share launcher.log.</p>
+            <p><strong>Inference runtime files are missing.</strong>
+              Reinstall PhenoAI using the latest installer, then click Check Again.</p>
           </div>
-          <div class="actions" style="margin-top:16px">
+          <div class="actions" style="margin-top:12px">
             <button @click="checkEnvironment" class="btn-secondary">Check Again</button>
-            <button @click="openLogs" class="btn-secondary">View Full Logs</button>
+            <button @click="openLogs" class="btn-secondary">View Logs</button>
           </div>
         </div>
 
-        <!-- Python missing -->
         <div v-else-if="!pythonPath" class="needs-python">
           <div class="help-text">
-            <p><strong>No Python runtime was found.</strong>
-              If you installed from the official PhenoAI installer, reinstall with the bundled runtime package.
-              For source/dev runs, install Python 3.9+ or set PHENOAI_PYTHON to a valid interpreter, then restart PhenoAI.</p>
+            <p><strong>No Python runtime found.</strong>
+              Install Python 3.9+ or reinstall PhenoAI with the bundled runtime.</p>
           </div>
-          <div class="actions" style="margin-top:16px">
+          <div class="actions" style="margin-top:12px">
             <button @click="checkEnvironment" class="btn-secondary">Check Again</button>
           </div>
         </div>
 
-        <!-- Model missing -->
         <div v-else-if="!modelDir" class="needs-model">
           <div class="help-text">
             <p><strong>Model files not found.</strong>
-              Place <strong>model.onnx</strong> and <strong>model_metadata.json</strong> in one of these folders:
-              <br>• %APPDATA%\PhenoAI\models\cavfish_v1
-              <br>• {project}/models/cavfish_v1 (source/dev runs)
-              <br>Then click Check Again or restart PhenoAI.</p>
+              Place model.onnx and model_metadata.json in the models directory, then click Check Again.</p>
           </div>
-          <div class="actions" style="margin-top:16px">
+          <div class="actions" style="margin-top:12px">
             <button @click="checkEnvironment" class="btn-secondary">Check Again</button>
           </div>
         </div>
@@ -102,9 +86,9 @@
           <div class="step" v-for="(step, index) in steps" :key="index"
                :class="{ active: currentStep === index, completed: currentStep > index, error: step.error }">
             <div class="step-icon">
-              <span v-if="currentStep > index && !step.error">✓</span>
-              <span v-else-if="step.error">✗</span>
-              <span v-else-if="currentStep === index" class="spinner">⏳</span>
+              <span v-if="currentStep > index && !step.error">\u2713</span>
+              <span v-else-if="step.error">\u2717</span>
+              <span v-else-if="currentStep === index" class="spinner-dot"></span>
               <span v-else>{{ index + 1 }}</span>
             </div>
             <div class="step-content">
@@ -122,7 +106,7 @@
           <div v-for="(log, i) in logs" :key="i" :class="['log-line', log.level]">
             {{ log.message }}
           </div>
-          <div v-if="launchInProgress && logs.length === 0" class="log-line">Starting backend…</div>
+          <div v-if="launchInProgress && logs.length === 0" class="log-line">Starting backend...</div>
         </div>
       </div>
 
@@ -136,8 +120,8 @@
 
       <!-- Error actions -->
       <div class="actions" v-if="setupError">
-        <button @click="retrySetup" class="btn-primary">Retry Setup</button>
-        <button @click="openLogs" class="btn-secondary">View Full Logs</button>
+        <button @click="retrySetup" class="btn-primary">Retry</button>
+        <button @click="openLogs" class="btn-secondary">View Logs</button>
       </div>
 
       <!-- Success actions -->
@@ -301,90 +285,121 @@ onMounted(() => { checkEnvironment() })
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  background: var(--bg-canvas, #0d1117);
   padding: 20px;
   overflow-y: auto;
   box-sizing: border-box;
 }
 .setup-card {
-  background: #f8f9fa;
-  border-radius: 16px;
-  padding: 32px;
-  max-width: 600px;
+  background: var(--bg-surface, #161b22);
+  border: 1px solid var(--border-default, #30363d);
+  border-radius: 8px;
+  padding: 28px;
+  max-width: 560px;
   width: 100%;
-  box-shadow: 0 20px 60px rgba(0,0,0,.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   margin: auto;
   flex-shrink: 0;
 }
 .header { text-align: center; margin-bottom: 16px; }
-.logo-icon { font-size: 36px; margin-bottom: 8px; }
-.header h1 { color: #1a1a2e; font-size: 20px; margin: 0 0 6px; }
-.subtitle { color: #666; font-size: 13px; margin: 0; }
+.header h1 { color: var(--text-primary, #c9d1d9); font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+.subtitle { color: var(--text-secondary, #8b949e); font-size: 12px; margin: 0; }
 
-/* Pre-check screen */
-.choice-screen { padding: 20px 0; }
-.choice-header { text-align: center; margin-bottom: 24px; }
-.choice-header h2 { color: #1a1a2e; font-size: 24px; margin: 0 0 12px; }
-.choice-header p { color: #666; font-size: 14px; margin: 0; }
-.environment-check { background: #f0f0f0; border-radius: 8px; padding: 16px; margin-bottom: 24px; }
-.check-item { display: flex; align-items: center; gap: 12px; padding: 8px 0; font-size: 14px; color: #333; }
-.check-item.success { color: #2e7d32; }
-.check-item.warning { color: #f57c00; }
-.check-icon { font-size: 18px; font-weight: bold; }
+.choice-screen { padding: 16px 0; }
+.choice-header { text-align: center; margin-bottom: 20px; }
+.choice-header h2 { color: var(--text-primary, #c9d1d9); font-size: 16px; font-weight: 600; margin: 0 0 8px; }
+.choice-header p { color: var(--text-secondary, #8b949e); font-size: 13px; margin: 0; }
+
+.environment-check {
+  background: var(--bg-canvas, #0d1117);
+  border: 1px solid var(--border-default, #30363d);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 20px;
+}
+.check-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 0; font-size: 13px; color: var(--text-secondary, #8b949e);
+}
+.check-item.success { color: var(--accent-green, #3fb950); }
+.check-item.warning { color: var(--accent-orange, #d29922); }
+.check-icon { font-size: 14px; font-weight: 700; width: 16px; text-align: center; flex-shrink: 0; }
 
 .all-ready, .needs-install, .needs-python, .needs-model { text-align: center; }
-.ready-message { color: #2e7d32; font-weight: 600; font-size: 16px; margin-bottom: 16px; }
-.info-message { color: #1565c0; font-size: 14px; margin-bottom: 16px; }
+.ready-message { color: var(--accent-green, #3fb950); font-weight: 600; font-size: 14px; margin-bottom: 12px; }
+.info-message { color: var(--accent-blue, #58a6ff); font-size: 13px; margin-bottom: 12px; }
 
 .help-text {
-  background: #e3f2fd; border-left: 4px solid #2196f3;
-  padding: 16px; border-radius: 4px;
+  background: rgba(88, 166, 255, 0.08);
+  border-left: 3px solid var(--accent-blue, #58a6ff);
+  padding: 12px; border-radius: 4px;
 }
-.help-text p { margin: 0; font-size: 13px; color: #1565c0; line-height: 1.6; }
+.help-text p { margin: 0; font-size: 12px; color: var(--text-secondary, #8b949e); line-height: 1.6; }
+.help-text strong { color: var(--text-primary, #c9d1d9); }
 
-/* Steps */
 .progress-section { margin-bottom: 16px; }
-.steps-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px 16px; }
-.step { display: flex; align-items: flex-start; padding: 8px 0; opacity: .5; transition: opacity .3s; }
+.steps-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px 12px; }
+.step { display: flex; align-items: flex-start; padding: 6px 0; opacity: .4; transition: opacity .2s; }
 .step.active, .step.completed { opacity: 1; }
 .step.error { opacity: 1; }
 .step-icon {
-  width: 26px; height: 26px; border-radius: 50%; background: #ddd;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--bg-overlay, #21262d);
   display: flex; align-items: center; justify-content: center;
-  font-size: 12px; color: #666; margin-right: 10px; flex-shrink: 0;
+  font-size: 11px; color: var(--text-muted, #484f58);
+  margin-right: 8px; flex-shrink: 0;
 }
-.step.completed .step-icon { background: #4caf50; color: #fff; }
-.step.active .step-icon { background: #2196f3; color: #fff; }
-.step.error .step-icon { background: #f44336; color: #fff; }
-.spinner { animation: spin 1s linear infinite; }
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.step.completed .step-icon { background: var(--accent-green, #3fb950); color: #fff; }
+.step.active .step-icon { background: var(--accent-blue, #58a6ff); color: #fff; }
+.step.error .step-icon { background: var(--accent-red, #f85149); color: #fff; }
+
+.spinner-dot {
+  width: 8px; height: 8px; border: 2px solid transparent;
+  border-top-color: #fff; border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 .step-content { flex: 1; }
-.step-title { color: #1a1a2e; font-size: 15px; font-weight: 600; }
-.step-description { color: #555; font-size: 13px; margin-top: 4px; }
+.step-title { color: var(--text-primary, #c9d1d9); font-size: 13px; font-weight: 600; }
+.step-description { color: var(--text-secondary, #8b949e); font-size: 12px; margin-top: 2px; }
 
-/* Log */
-.log-section { background: #1a1a2e; border-radius: 8px; margin-bottom: 20px; overflow: hidden; }
-.log-header { padding: 10px 16px; background: #16213e; color: #ccc; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
-.log-content { padding: 12px 16px; max-height: 150px; overflow-y: auto; font-family: 'Monaco','Menlo',monospace; font-size: 12px; }
-.log-line { color: #ddd; padding: 2px 0; }
-.log-line.warning { color: #ffc107; }
-.log-line.error { color: #f44336; }
-.log-line.success { color: #4caf50; }
-
-/* Status bar */
-.status-bar { margin-bottom: 20px; }
-.status-text { color: #555; font-size: 14px; margin-bottom: 8px; }
-.progress-bar { height: 4px; background: #ddd; border-radius: 2px; overflow: hidden; }
-.progress-fill { height: 100%; background: linear-gradient(90deg, #2196f3, #4caf50); transition: width .3s ease; }
-
-/* Buttons */
-.actions { display: flex; gap: 12px; justify-content: center; }
-.btn-primary, .btn-secondary {
-  padding: 12px 24px; border-radius: 8px; font-size: 14px;
-  font-weight: 500; cursor: pointer; border: none; transition: all .2s;
+.log-section {
+  background: var(--bg-canvas, #0d1117);
+  border: 1px solid var(--border-default, #30363d);
+  border-radius: 6px; margin-bottom: 16px; overflow: hidden;
 }
-.btn-primary { background: #2196f3; color: #fff; }
-.btn-primary:hover { background: #1976d2; }
-.btn-secondary { background: #333; color: #fff; }
-.btn-secondary:hover { background: #444; }
+.log-header {
+  padding: 6px 12px; background: var(--bg-overlay, #21262d);
+  color: var(--text-muted, #484f58); font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;
+}
+.log-content {
+  padding: 8px 12px; max-height: 140px; overflow-y: auto;
+  font-family: var(--font-mono, monospace); font-size: 11px;
+}
+.log-line { color: var(--text-secondary, #8b949e); padding: 1px 0; }
+.log-line.warning { color: var(--accent-orange, #d29922); }
+.log-line.error { color: var(--accent-red, #f85149); }
+.log-line.success { color: var(--accent-green, #3fb950); }
+
+.status-bar { margin-bottom: 16px; }
+.status-text { color: var(--text-secondary, #8b949e); font-size: 13px; margin-bottom: 6px; }
+.progress-bar { height: 3px; background: var(--bg-overlay, #21262d); border-radius: 2px; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--accent-blue, #58a6ff); transition: width .3s ease; }
+
+.actions { display: flex; gap: 8px; justify-content: center; }
+.btn-primary, .btn-secondary {
+  padding: 6px 16px; border-radius: 6px; font-size: 13px;
+  font-weight: 500; cursor: pointer; border: 1px solid transparent;
+  transition: background .12s; font-family: var(--font-sans, sans-serif);
+}
+.btn-primary { background: var(--accent-blue, #58a6ff); color: #fff; }
+.btn-primary:hover { background: #4c9aed; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-secondary {
+  background: var(--bg-overlay, #21262d); color: var(--text-primary, #c9d1d9);
+  border-color: var(--border-default, #30363d);
+}
+.btn-secondary:hover { background: var(--bg-surface-raised, #1c2129); }
 </style>

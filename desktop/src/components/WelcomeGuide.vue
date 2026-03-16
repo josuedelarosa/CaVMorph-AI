@@ -1,86 +1,66 @@
 <template>
   <div v-if="show" class="welcome-overlay" @click.self="handleClose">
     <div class="welcome-modal">
-      <button class="close-btn" @click="handleClose">✕</button>
+      <button class="close-btn" @click="handleClose">&times;</button>
       
       <div class="welcome-header">
-        <div class="logo">🐟</div>
-        <h1>Welcome to PhenoAI</h1>
-        <p class="subtitle">AI-powered phenotype analysis for fish morphometrics</p>
+        <h1>PhenoAI</h1>
+        <p class="subtitle">Phenotype analysis for fish morphometrics</p>
       </div>
 
       <div class="guide-content">
         <div class="guide-section">
-          <div class="section-icon">📂</div>
           <h2>Supported Formats</h2>
           <p>PhenoAI accepts the following image formats:</p>
           <ul>
-            <li><strong>JPEG</strong> (.jpg, .jpeg) - Recommended</li>
-            <li><strong>PNG</strong> (.png) - Lossless quality</li>
-            <li><strong>BMP</strong> (.bmp) - Uncompressed</li>
-            <li><strong>TIFF</strong> (.tif, .tiff) - High quality</li>
+            <li><strong>JPEG</strong> (.jpg, .jpeg)</li>
+            <li><strong>PNG</strong> (.png)</li>
+            <li><strong>BMP</strong> (.bmp)</li>
+            <li><strong>TIFF</strong> (.tif, .tiff)</li>
           </ul>
-          <p class="tip">💡 For best results, use high-resolution images with clear fish specimens</p>
+          <p class="tip">For best results, use high-resolution images with clear specimens.</p>
         </div>
 
         <div class="guide-section">
-          <div class="section-icon">🏷️</div>
-          <h2>Understanding Profiles</h2>
-          <p><strong>Profiles</strong> are like <em>species classes</em> or <em>fish types</em> in your analysis.</p>
+          <h2>Profiles</h2>
+          <p><strong>Profiles</strong> group specimens by species or experiment type.</p>
           <div class="explanation-box">
-            <p><strong>What they do:</strong></p>
+            <p><strong>Each profile can have its own keypoint configuration.</strong></p>
             <ul>
-              <li>Group similar fish specimens together</li>
-              <li>Each profile can have its own keypoint configuration</li>
-              <li>Default profile uses 20 anatomical keypoints</li>
-            </ul>
-            <p><strong>Why use multiple profiles?</strong></p>
-            <ul>
-              <li>Different fish species have different body structures</li>
-              <li>Keypoint detection accuracy improves with species-specific models</li>
-              <li>Organize your data by experiment, location, or population</li>
+              <li>The default profile uses 20 anatomical keypoints</li>
+              <li>Create custom profiles for specific species</li>
+              <li>Organize data by experiment, location, or population</li>
             </ul>
           </div>
-          <p class="note">
-            <strong>Note:</strong> The default 20-keypoint annotation is a general model. 
-            For precise biological analysis, create custom profiles for your specific species.
-          </p>
         </div>
 
         <div class="guide-section">
-          <div class="section-icon">🎯</div>
-          <h2>Quick Start</h2>
+          <h2>Workflow</h2>
           <ol class="quick-start-list">
-            <li>Select or create a <strong>Profile</strong> for your fish type</li>
-            <li>Drag & drop images or click <strong>Upload Images</strong></li>
-            <li>Click <strong>Analyze</strong> to detect keypoints automatically</li>
-            <li>Review and adjust keypoints if needed</li>
-            <li>Export your annotated data as JPEG with overlays</li>
+            <li>Select or create a <strong>Profile</strong> for your specimen type</li>
+            <li>Select a folder of images</li>
+            <li>Click <strong>Run Analysis</strong> to detect keypoints</li>
+            <li>Review results and measurements</li>
+            <li>Export annotated data</li>
           </ol>
         </div>
 
         <div class="guide-section">
-          <div class="section-icon">📊</div>
-          <h2>Export & Results</h2>
-          <p>Analyzed images are automatically saved to:</p>
+          <h2>Export</h2>
+          <p>Results are saved to:</p>
           <div class="path-box">
             <code>~/Documents/PhenoAI/</code>
           </div>
-          <p>Each export includes:</p>
-          <ul>
-            <li>Annotated image with keypoint overlays</li>
-            <li>Phenotype measurements (distances, ratios)</li>
-            <li>Timestamp and profile information</li>
-          </ul>
+          <p>Each export includes annotated images, phenotype measurements, and profile metadata.</p>
         </div>
       </div>
 
       <div class="welcome-footer">
         <label class="checkbox-label">
           <input type="checkbox" v-model="dontShowAgain" />
-          <span>Don't show this again</span>
+          <span>Don't show again</span>
         </label>
-        <button class="start-btn" @click="handleClose">Get Started</button>
+        <button class="start-btn" @click="handleClose">Start</button>
       </div>
     </div>
   </div>
@@ -114,279 +94,209 @@ const handleClose = () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.65);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
   padding: 20px;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(3px);
 }
 
 .welcome-modal {
-  background: white;
-  border-radius: 16px;
-  max-width: 700px;
-  max-height: 90vh;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  max-width: 640px;
+  max-height: 85vh;
   overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-overlay);
   position: relative;
-  animation: slideIn 0.3s ease-out;
+  animation: fadeIn 0.15s ease-out;
 }
 
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .close-btn {
   position: absolute;
-  top: 16px;
-  right: 16px;
-  background: #f5f5f5;
+  top: 12px;
+  right: 12px;
+  background: transparent;
   border: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
   font-size: 18px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  color: var(--text-muted);
+  transition: color 0.12s, background 0.12s;
   z-index: 10;
 }
 
 .close-btn:hover {
-  background: #e0e0e0;
-  transform: rotate(90deg);
+  color: var(--text-primary);
+  background: var(--bg-overlay);
 }
 
 .welcome-header {
   text-align: center;
-  padding: 40px 40px 24px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-radius: 16px 16px 0 0;
-}
-
-.logo {
-  font-size: 64px;
-  margin-bottom: 16px;
+  padding: var(--sp-32) var(--sp-32) var(--sp-16);
 }
 
 .welcome-header h1 {
-  margin: 0 0 8px 0;
-  font-size: 32px;
-  font-weight: 700;
+  margin: 0 0 6px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .subtitle {
   margin: 0;
-  font-size: 16px;
-  opacity: 0.95;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
 }
 
 .guide-content {
-  padding: 32px 40px;
+  padding: var(--sp-16) var(--sp-32);
 }
 
 .guide-section {
-  margin-bottom: 32px;
+  margin-bottom: var(--sp-24);
 }
 
 .guide-section:last-child {
   margin-bottom: 0;
 }
 
-.section-icon {
-  font-size: 32px;
-  margin-bottom: 12px;
-}
-
 .guide-section h2 {
-  color: #1a1a2e;
-  font-size: 20px;
-  margin: 0 0 12px 0;
+  color: var(--text-primary);
+  font-size: var(--fs-md);
+  margin: 0 0 var(--sp-8) 0;
   font-weight: 600;
 }
 
 .guide-section p {
-  color: #555;
+  color: var(--text-secondary);
   line-height: 1.6;
-  margin: 0 0 12px 0;
+  margin: 0 0 var(--sp-8) 0;
+  font-size: var(--fs-sm);
 }
 
 .guide-section ul,
 .guide-section ol {
-  color: #555;
-  line-height: 1.8;
-  margin: 12px 0;
-  padding-left: 24px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin: var(--sp-8) 0;
+  padding-left: 20px;
+  font-size: var(--fs-sm);
 }
 
 .guide-section li {
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .guide-section strong {
-  color: #333;
+  color: var(--text-primary);
   font-weight: 600;
-}
-
-.guide-section em {
-  color: #667eea;
-  font-style: italic;
 }
 
 .tip {
-  background: #e3f2fd;
-  border-left: 4px solid #2196f3;
-  padding: 12px;
-  border-radius: 4px;
-  font-size: 14px;
-  color: #1565c0 !important;
-  margin-top: 12px !important;
-}
-
-.note {
-  background: #fff3e0;
-  border-left: 4px solid #ff9800;
-  padding: 12px;
-  border-radius: 4px;
-  font-size: 14px;
-  color: #e65100 !important;
-  margin-top: 12px !important;
+  background: rgba(88, 166, 255, 0.08);
+  border-left: 3px solid var(--accent-blue);
+  padding: var(--sp-8) var(--sp-12);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs) !important;
+  color: var(--accent-blue) !important;
 }
 
 .explanation-box {
-  background: #f5f5f5;
-  border-radius: 8px;
-  padding: 16px;
-  margin: 12px 0;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-md);
+  padding: var(--sp-12);
+  margin: var(--sp-8) 0;
 }
 
 .explanation-box p {
-  margin: 0 0 8px 0;
-  font-weight: 600;
+  margin: 0 0 var(--sp-4) 0;
 }
 
 .explanation-box ul {
-  margin: 8px 0 0 0;
+  margin: var(--sp-4) 0 0 0;
 }
 
 .path-box {
-  background: #2d2d2d;
-  color: #a8e063;
-  padding: 12px;
-  border-radius: 6px;
-  font-family: 'Monaco', 'Courier New', monospace;
-  margin: 12px 0;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-muted);
+  color: var(--accent-green);
+  padding: var(--sp-8) var(--sp-12);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  margin: var(--sp-8) 0;
 }
 
 .path-box code {
-  font-size: 14px;
+  font-size: var(--fs-sm);
 }
 
 .quick-start-list {
-  counter-reset: step-counter;
-  list-style: none;
-  padding-left: 0;
+  padding-left: 20px;
 }
 
 .quick-start-list li {
-  counter-increment: step-counter;
-  position: relative;
-  padding-left: 40px;
-  margin-bottom: 16px;
-}
-
-.quick-start-list li::before {
-  content: counter(step-counter);
-  position: absolute;
-  left: 0;
-  top: 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 14px;
+  margin-bottom: var(--sp-8);
 }
 
 .welcome-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 40px;
-  border-top: 1px solid #e0e0e0;
-  background: #fafafa;
-  border-radius: 0 0 16px 16px;
+  padding: var(--sp-16) var(--sp-32);
+  border-top: 1px solid var(--border-default);
 }
 
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-8);
   cursor: pointer;
   user-select: none;
-  color: #666;
-  font-size: 14px;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
 }
 
 .checkbox-label input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   cursor: pointer;
+  accent-color: var(--accent-blue);
 }
 
 .start-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: var(--accent-blue);
+  color: var(--text-on-emphasis);
   border: none;
-  padding: 12px 32px;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 600;
+  padding: 6px 20px;
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  font-family: var(--font-sans);
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  transition: background 0.12s;
 }
 
 .start-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+  background: #4c9aed;
 }
 
-.start-btn:active {
-  transform: translateY(0);
-}
-
-/* Scrollbar styling */
-.welcome-modal::-webkit-scrollbar {
-  width: 8px;
-}
-
-.welcome-modal::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-.welcome-modal::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
-}
-
-.welcome-modal::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
+.welcome-modal::-webkit-scrollbar { width: 6px; }
+.welcome-modal::-webkit-scrollbar-track { background: transparent; }
+.welcome-modal::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 3px; }
+.welcome-modal::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 </style>

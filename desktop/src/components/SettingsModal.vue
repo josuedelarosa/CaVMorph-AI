@@ -39,7 +39,7 @@
             <input v-model="newProfileName" placeholder="Profile name" class="form-input" />
             <input v-model="newProfileDesc" placeholder="Description" class="form-input" />
             <button @click="createNewProfile" class="btn btn-sm btn-primary">
-              ➕ Create Profile
+              Create Profile
             </button>
           </div>
 
@@ -55,7 +55,7 @@
                 </div>
                 <small>{{ profile.description }}</small>
                 <div class="profile-folder" v-if="profile.folder_path">
-                  <small>📁 {{ profile.folder_path }}</small>
+                  <small>{{ profile.folder_path }}</small>
                 </div>
               </div>
               <button
@@ -63,7 +63,7 @@
                 @click="deleteCurrentProfile(profile.id)"
                 class="btn btn-sm btn-danger"
               >
-                🗑️ Delete
+                Delete
               </button>
             </div>
           </div>
@@ -71,7 +71,7 @@
       </div>
 
       <div class="modal-footer">
-        <button @click="saveSettings" class="btn btn-primary">✓ Save</button>
+        <button @click="saveSettings" class="btn btn-primary">Save</button>
         <button @click="close" class="btn btn-secondary">Cancel</button>
       </div>
     </div>
@@ -198,21 +198,23 @@ updateSelectedKeypoints()
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  backdrop-filter: blur(2px);
 }
 
 .modal-content {
-  background: white;
-  border-radius: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
   width: 90%;
-  max-width: 600px;
+  max-width: 640px;
   max-height: 80vh;
   overflow-y: auto;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-overlay);
 }
 
 .settings-modal {
@@ -224,92 +226,101 @@ updateSelectedKeypoints()
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #e0e0e0;
+  padding: var(--sp-16);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .modal-header h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .modal-body {
-  padding: 20px;
+  padding: var(--sp-16);
   flex: 1;
   overflow-y: auto;
 }
 
 .modal-footer {
   display: flex;
-  gap: 10px;
+  gap: var(--sp-8);
   justify-content: flex-end;
-  padding: 20px;
-  border-top: 1px solid #e0e0e0;
+  padding: var(--sp-12) var(--sp-16);
+  border-top: 1px solid var(--border-default);
 }
 
 .settings-section {
-  margin-bottom: 25px;
+  margin-bottom: 20px;
 }
 
 .settings-section h3 {
-  margin: 0 0 12px 0;
-  font-size: 14px;
+  margin: 0 0 var(--sp-8) 0;
+  font-size: var(--fs-xs);
   font-weight: 600;
   text-transform: uppercase;
-  color: #666;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
 }
 
 .form-select,
 .form-input {
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  margin-bottom: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  font-family: var(--font-sans);
+  margin-bottom: var(--sp-8);
+  background: var(--bg-canvas);
+  color: var(--text-primary);
 }
 
 .form-select:focus,
 .form-input:focus {
   outline: none;
-  border-color: #0066ff;
-  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.15);
 }
 
 .keypoint-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
+  gap: var(--sp-4);
 }
 
 .keypoint-checkbox {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   cursor: pointer;
-  padding: 8px;
-  border-radius: 4px;
-  transition: background 0.2s;
+  padding: 5px var(--sp-8);
+  border-radius: var(--radius-sm);
+  transition: background 0.12s;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
 }
 
 .keypoint-checkbox:hover {
-  background: #f5f5f5;
+  background: var(--bg-overlay);
 }
 
 .keypoint-checkbox input {
   cursor: pointer;
+  accent-color: var(--accent-blue);
 }
 
 .profile-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 15px;
+  gap: var(--sp-8);
+  margin-bottom: var(--sp-12);
 }
 
 .profile-list {
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
   max-height: 200px;
   overflow-y: auto;
 }
@@ -318,8 +329,8 @@ updateSelectedKeypoints()
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: var(--sp-8) var(--sp-12);
+  border-bottom: 1px solid var(--border-muted);
 }
 
 .profile-item:last-child {
@@ -329,7 +340,7 @@ updateSelectedKeypoints()
 .profile-info {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   flex: 1;
 }
 
@@ -337,7 +348,12 @@ updateSelectedKeypoints()
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: var(--sp-12);
+}
+
+.profile-header-row strong {
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
 }
 
 .toggle-label {
@@ -345,98 +361,94 @@ updateSelectedKeypoints()
   align-items: center;
   gap: 6px;
   cursor: pointer;
-  font-size: 12px;
-  color: #666;
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
 }
 
 .toggle-label input {
   cursor: pointer;
+  accent-color: var(--accent-blue);
 }
 
 .profile-folder {
-  color: #666;
-  font-family: monospace;
-  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
 }
 
 .profile-info small {
-  color: #999;
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
 }
 
 .close-btn {
   background: none;
   border: none;
-  font-size: 24px;
+  font-size: 18px;
   cursor: pointer;
-  color: #666;
+  color: var(--text-muted);
   padding: 0;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: color 0.12s, background 0.12s;
 }
 
 .close-btn:hover {
-  color: #000;
+  color: var(--text-primary);
+  background: var(--bg-overlay);
 }
 
 .btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 4px;
-  font-size: 14px;
+  padding: 5px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  font-family: var(--font-sans);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.12s, border-color 0.12s;
+  line-height: 20px;
 }
 
 .btn-primary {
-  background: #0066ff;
-  color: white;
+  background: var(--accent-blue);
+  color: var(--text-on-emphasis);
 }
 
 .btn-primary:hover {
-  background: #0052cc;
+  background: #4c9aed;
 }
 
 .btn-secondary {
-  background: #f0f0f0;
-  color: #333;
+  background: var(--bg-overlay);
+  color: var(--text-primary);
+  border-color: var(--border-default);
 }
 
 .btn-secondary:hover {
-  background: #e0e0e0;
+  background: var(--bg-surface-raised);
 }
 
 .btn-danger {
-  background: #ff4444;
-  color: white;
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--accent-red);
+  border-color: rgba(248, 81, 73, 0.3);
 }
 
 .btn-danger:hover {
-  background: #dd0000;
+  background: rgba(248, 81, 73, 0.25);
 }
 
 .btn-sm {
-  padding: 6px 12px;
-  font-size: 12px;
+  padding: 2px 8px;
+  font-size: var(--fs-xs);
 }
 
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 </style>
