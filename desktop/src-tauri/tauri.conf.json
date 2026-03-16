@@ -61,10 +61,11 @@
         "../runtime/python",
         "../../inference_runtime/**",
         "../../inference_runtime/*",
-        "../../backend/**",
-        "../../backend/*",
-        "../../models/cavfish_v1/**",
-        "../../models/cavfish_v1/*"
+        "../../models/cavfish_v1/model.onnx",
+        "../../models/cavfish_v1/model_metadata.json",
+        "../../models/cavfish_v1/meta.json",
+        "../../models/cavfish_v1/config.py",
+        "../../models/cavfish_v1/config_infer.py"
       ]
     },
     "security": {
