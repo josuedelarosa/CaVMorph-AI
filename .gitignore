@@ -64,7 +64,6 @@ data/
 datasets/
 images/
 videos/
-*.jpg
 *.jpeg
 *.png
 *.gif
