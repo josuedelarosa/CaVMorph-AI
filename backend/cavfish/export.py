@@ -55,7 +55,7 @@ def export_csv(
 
     # Add keypoint columns (only for keypoints that exist)
     for i, name in enumerate(keypoint_names):
-        fieldnames.extend([f"{name}_x", f"{name}_y", f"{name}_conf"])
+        fieldnames.extend([f"{name}_x", f"{name}_y"])
 
     # Add phenotype columns (only for phenotypes that exist in filtered data)
     for pheno in phenotypes_data:
@@ -81,11 +81,9 @@ def export_csv(
                         kpt = kpts[i]
                         row[f"{name}_x"] = kpt.get("x", "")
                         row[f"{name}_y"] = kpt.get("y", "")
-                        row[f"{name}_conf"] = kpt.get("score", "")
                     else:
                         row[f"{name}_x"] = ""
                         row[f"{name}_y"] = ""
-                        row[f"{name}_conf"] = ""
             else:
                 # Array format - legacy handling
                 # Flatten if nested: [[[x,y],...]] -> [[x,y],...]
@@ -95,17 +93,10 @@ def export_csv(
                         if isinstance(kpts[0][0], list) and len(kpts[0][0]) == 2:
                             # It's [[[x,y], ...]], flatten to [[x,y], ...]
                             kpts = kpts[0] if len(kpts) == 1 else kpts
-                
-                # Flatten scores similarly
-                if isinstance(scores, list) and len(scores) > 0:
-                    if isinstance(scores[0], list):
-                        # It's [[score1, score2, ...]], flatten to [score1, score2, ...]
-                        scores = scores[0] if len(scores) == 1 else scores
 
                 for i, name in enumerate(keypoint_names):
                     x_val = ""
                     y_val = ""
-                    conf_val = ""
                     
                     # Extract x, y from keypoint
                     if i < len(kpts):
@@ -123,15 +114,8 @@ def export_csv(
                                     x_val = float(kpt[0])
                                     y_val = float(kpt[1])
                     
-                    # Extract confidence
-                    if i < len(scores):
-                        score = scores[i]
-                        if isinstance(score, (int, float)):
-                            conf_val = float(score)
-                    
                     row[f"{name}_x"] = x_val
                     row[f"{name}_y"] = y_val
-                    row[f"{name}_conf"] = conf_val
 
             # Extract phenotypes from this prediction (already filtered)
             extra_fields = pred.get("extra_pred_fields", {})

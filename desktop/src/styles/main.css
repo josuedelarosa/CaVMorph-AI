@@ -750,6 +750,139 @@ html, body {
   color: var(--text-muted);
 }
 
+/* ── Measurements info button ────────────────────────────────────────────────── */
+.measures-info-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.measures-info-btn:hover {
+  background: var(--accent-muted, rgba(99,102,241,0.12));
+  color: var(--accent, #6366f1);
+  border-color: var(--accent, #6366f1);
+}
+.measures-info-icon {
+  font-style: normal;
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* ── Measurements diagram lightbox ──────────────────────────────────────────── */
+.measures-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  outline: none;
+}
+.measures-lightbox-inner {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-width: 90vw;
+  max-height: 90vh;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+}
+.measures-lightbox-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-panel-header);
+  flex-shrink: 0;
+}
+.measures-lightbox-title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.measures-lightbox-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.measures-lightbox-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.measures-lightbox-img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(90vh - 120px);
+  object-fit: contain;
+}
+.measures-lightbox-reference {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-panel-header);
+  flex-shrink: 0;
+}
+.measures-lightbox-reference-label {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.measures-lightbox-reference-authors {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.measures-lightbox-reference-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--fs-xs);
+  color: var(--accent-primary, #4a9eff);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 500;
+  text-align: left;
+}
+.measures-lightbox-reference-link:hover {
+  color: var(--accent-hover, #78b8ff);
+}
+.measures-lightbox-reference-journal {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .table-wrap {
   flex: 1;
   overflow: auto;
@@ -784,6 +917,46 @@ html, body {
 .th-num      { width: 80px; text-align: right; }
 .th-measure  { width: 90px; text-align: right; }
 
+/* ── Column info tooltip ─────────────────────────────────────────────────── */
+.col-info-tip {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 4px;
+  cursor: pointer;
+}
+.col-info-icon {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1;
+  transition: color 0.15s;
+}
+.col-info-tip:hover .col-info-icon {
+  color: var(--accent-blue);
+}
+
+/* ── Confidence teleport tooltip ─────────────────────────────────────────── */
+.conf-tooltip {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  width: 260px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 10px 12px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  white-space: normal;
+  text-align: left;
+  z-index: 9000;
+  pointer-events: none;
+}
+
 .data-table tbody tr {
   cursor: pointer;
   border-bottom: 1px solid var(--border-muted);
@@ -802,6 +975,10 @@ html, body {
 .td-specimen { font-family: var(--font-mono); font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .td-num      { text-align: right; font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-secondary); }
 .td-measure  { text-align: right; font-family: var(--font-mono); font-size: var(--fs-xs); }
+.th-measure-hover { cursor: crosshair; transition: color 0.12s, background 0.12s; }
+.th-measure-hover:hover { color: var(--accent-blue); background: var(--accent-blue-bg); }
+.td-measure-hover { cursor: crosshair; transition: background 0.12s; }
+.td-measure-hover:hover { background: var(--accent-blue-bg) !important; color: var(--accent-blue); }
 
 /* ── Row Resize Handle ───────────────────────────────────────────────────────── */
 

@@ -259,6 +259,14 @@
                   &nbsp;·&nbsp;{{ allPhenotypeKeys.length }} variables
                 </template>
               </span>
+              <button
+                class="measures-info-btn"
+                @click="showMeasuresDiagram = true"
+                title="How are measurements calculated?"
+              >
+                <span class="measures-info-icon">ⓘ</span>
+                How it's measured
+              </button>
             </div>
             <div class="table-wrap">
               <table class="data-table">
@@ -271,11 +279,23 @@
                       </div>
                     </th>
                     <th class="th-num">Landmarks</th>
-                    <th class="th-num">Confidence</th>
+                    <th class="th-num">
+                      Confidence
+                      <span
+                        class="col-info-tip"
+                        @mouseenter="showConfTip = true"
+                        @mouseleave="showConfTip = false"
+                        @mousemove="confTipX = $event.clientX; confTipY = $event.clientY"
+                      >
+                        <span class="col-info-icon">&#x24D8;</span>
+                      </span>
+                    </th>
                     <th
                       v-for="key in allPhenotypeKeys"
                       :key="key"
-                      class="th-measure"
+                      class="th-measure th-measure-hover"
+                      @mouseenter="hoveredPhenotype = key"
+                      @mouseleave="hoveredPhenotype = null"
                     >{{ key }}</th>
                   </tr>
                 </thead>
@@ -292,7 +312,9 @@
                     <td
                       v-for="key in allPhenotypeKeys"
                       :key="key"
-                      class="td-measure"
+                      class="td-measure td-measure-hover"
+                      @mouseenter="hoveredPhenotype = key"
+                      @mouseleave="hoveredPhenotype = null"
                     >{{ getPhenotypeValue(pred, key) }}</td>
                   </tr>
                 </tbody>
@@ -352,6 +374,51 @@
       <span>Backend: <span :class="backendStatus">{{ backendStatusText }}</span></span>
     </footer>
 
+    <!-- Confidence tooltip -->
+    <teleport to="body">
+      <div
+        v-if="showConfTip"
+        class="conf-tooltip"
+        :style="{ top: confTipY - 8 + 'px', left: confTipX + 'px' }"
+      >
+        The average keypoint confidence score output by the ViTPose model.
+        For each detected keypoint, the model produces a heatmap and the peak
+        activation value is used as the confidence score (0–100%).
+        A higher value means the model is more certain about the keypoint’s
+        position. Low scores can indicate occlusion, poor image quality,
+        or the keypoint being near the frame edge.
+      </div>
+    </teleport>
+
+    <!-- Measures diagram lightbox -->
+    <div
+      v-if="showMeasuresDiagram"
+      class="measures-lightbox-overlay"
+      @click="showMeasuresDiagram = false"
+      @keydown.esc="showMeasuresDiagram = false"
+      tabindex="0"
+    >
+      <div class="measures-lightbox-inner" @click.stop>
+        <div class="measures-lightbox-header">
+          <span class="measures-lightbox-title">How measurements are calculated</span>
+          <button class="measures-lightbox-close" @click="showMeasuresDiagram = false">&times;</button>
+        </div>
+        <img
+          src="/measures-diagram.jpg"
+          alt="Measurements diagram"
+          class="measures-lightbox-img"
+        />
+        <div class="measures-lightbox-reference">
+          <span class="measures-lightbox-reference-label">Recommended photography system:</span>
+          <span class="measures-lightbox-reference-authors">García-Melo et al.</span>
+          <button class="measures-lightbox-reference-link" @click="openPhotafishArticle">
+            Photafish system: An affordable device for fish photography in the wild
+          </button>
+          <span class="measures-lightbox-reference-journal">Zootaxa 4554(1), 2019</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Settings Modal -->
     <SettingsModal
       :isOpen="showSettings"
@@ -378,6 +445,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { invoke, convertFileSrc } from '@tauri-apps/api/tauri'
 import { open } from '@tauri-apps/api/dialog'
+import { open as shellOpen } from '@tauri-apps/api/shell'
 import { readBinaryFile } from '@tauri-apps/api/fs'
 import { homeDir } from '@tauri-apps/api/path'
 import type { PredictionResult, ModelInfo, AnalysisState, Profile } from './types'
@@ -402,6 +470,7 @@ import {
   setDarkMode,
   setContributionOptIn,
   getOrCreateAnonymousId,
+  PRESET_PROFILES,
 } from './utils/storage'
 import { uploadContributions } from './utils/contribution'
 
@@ -424,10 +493,19 @@ const modelInfo = ref<ModelInfo | null>(null)
 const backendReady = ref(false)
 const previewCanvas = ref<HTMLCanvasElement | null>(null)
 const showSettings = ref(false)
+const showMeasuresDiagram = ref(false)
+
+function openPhotafishArticle() {
+  shellOpen('https://www.mapress.com/zt/article/view/zootaxa.4554.1.4')
+}
+const showConfTip = ref(false)
+const confTipX = ref(0)
+const confTipY = ref(0)
+const hoveredPhenotype = ref<string | null>(null)
 const showDebugConsole = ref(false)
 const debugLogs = ref<Array<{time: string, level: string, message: string}>>([])
 const profiles = ref<Profile[]>([])
-const activeProfileId = ref('default')
+const activeProfileId = ref(PRESET_PROFILES[0].id)
 const selectedKeypoints = ref<Set<number>>(new Set())
 const selectedProfileFilter = ref('')
 const showWelcome = ref(false)
@@ -534,16 +612,37 @@ function getPhenotypeCount(pred: PredictionResult): number {
   return pred.extra_pred_fields?.phenotypes?.length || 0
 }
 
-// All unique phenotype keys across the current filtered predictions (for table columns)
+// All unique phenotype keys across the current filtered predictions (for table columns).
+// - Specific profile selected: only columns where both KPs are in that profile.
+// - "All profiles" (no filter): union of all valid columns across every row,
+//   each row gated by its own profile. Cells that don't apply show '—'.
 const allPhenotypeKeys = computed(() => {
-  const keys: string[] = []
-  const seen = new Set<string>()
-  filteredPredictions.value.forEach(pred => {
-    pred.extra_pred_fields?.phenotypes?.forEach((p: any) => {
-      if (!seen.has(p.name)) { seen.add(p.name); keys.push(p.name) }
+  // Always derive column list from the canonical modelInfo — never from stale prediction names
+  const names = modelInfo.value?.phenotype_names
+  const pairs = modelInfo.value?.phenotype_pairs
+  if (!names || !pairs || names.length === 0) return []
+
+  if (selectedProfileFilter.value) {
+    // Single profile view — only columns where both KPs belong to the profile
+    const activeProfile = profiles.value.find(p => p.id === selectedProfileFilter.value)
+    const selectedKpts = activeProfile ? new Set(activeProfile.selected_keypoints) : null
+    return names.filter((_, idx) => {
+      if (!selectedKpts) return true
+      const pair = pairs[idx]
+      return pair ? selectedKpts.has(pair[0]) && selectedKpts.has(pair[1]) : true
     })
-  })
-  return keys
+  } else {
+    // All profiles — show column if at least one profile covers both KPs
+    if (profiles.value.length === 0) return names
+    return names.filter((_, idx) => {
+      const pair = pairs[idx]
+      if (!pair) return true
+      return profiles.value.some(prof => {
+        const kpts = new Set(prof.selected_keypoints)
+        return kpts.has(pair[0]) && kpts.has(pair[1])
+      })
+    })
+  }
 })
 
 const keypointCount = computed(() => {
@@ -651,11 +750,26 @@ function getImageDataUrl(imagePath: string): string {
 }
 
 function getPhenotypeValue(pred: PredictionResult, phenotypeName: string): string {
-  const phenos = pred.extra_pred_fields?.phenotypes || []
-  const pheno = phenos.find(p => p.name === phenotypeName)
-  if (!pheno) return '-'
-  const value = pheno.value_px
-  return typeof value === 'number' ? value.toFixed(2) : '-'
+  // Resolve canonical index from modelInfo — decoupled from stale prediction names
+  const names = modelInfo.value?.phenotype_names || []
+  const pairs = modelInfo.value?.phenotype_pairs || []
+  const idx = names.indexOf(phenotypeName)
+  if (idx === -1) return '—'
+
+  // Gate by the prediction's own profile
+  const predProfileId = (pred as any).profile_id
+  const predProfile = predProfileId ? profiles.value.find(p => p.id === predProfileId) : null
+  if (predProfile) {
+    const predKpts = new Set(predProfile.selected_keypoints)
+    const pair = pairs[idx]
+    if (pair && (!predKpts.has(pair[0]) || !predKpts.has(pair[1]))) return '—'
+  }
+
+  // Find by id (stable index) first, fall back to name match for older data
+  const phenos: any[] = pred.extra_pred_fields?.phenotypes || []
+  const pheno = phenos.find((p: any) => p.id === idx) ?? phenos.find((p: any) => p.name === phenotypeName)
+  if (!pheno || typeof pheno.value_px !== 'number') return '—'
+  return pheno.value_px.toFixed(2)
 }
 
 function selectPrediction(idx: number) {
@@ -1075,14 +1189,85 @@ function drawKeypointsOnCanvas(
     ctx.shadowBlur = 0
   }
 
-  // Draw confidence info
-  if (scores.length > 0) {
-    ctx.fillStyle = '#000000'
-    ctx.font = 'bold 12px sans-serif'
-    const avgScore = scores.reduce((a, b) => a + (Number(b) || 0), 0) / scores.length
-    const confText = isNaN(avgScore) ? 'N/A' : `${(avgScore * 100).toFixed(1)}%`
-    ctx.fillText(`Avg Confidence: ${confText}`, 10, (canvas.height / dpr) - 10)
+  // ── Measurement line overlay on hover ──────────────────────────────────
+  const hovered = hoveredPhenotype.value
+  if (hovered && pred.extra_pred_fields?.phenotypes) {
+    // Look up by canonical index first (robust against stale prediction names)
+    const _hovIdx = (modelInfo.value?.phenotype_names || []).indexOf(hovered)
+    const pheno = _hovIdx !== -1
+      ? pred.extra_pred_fields.phenotypes.find((p: any) => p.id === _hovIdx)
+        ?? pred.extra_pred_fields.phenotypes.find((p: any) => p.name === hovered)
+      : pred.extra_pred_fields.phenotypes.find((p: any) => p.name === hovered)
+    if (pheno) {
+      const [kp1, kp2] = modelInfo.value?.phenotype_pairs?.[pheno.id] || [pheno.pair[0], pheno.pair[1]]
+      const kpts = keypoints  // already flattened above
+
+      const kpt1 = kpts[kp1]
+      const kpt2 = kpts[kp2]
+      if (kpt1 && kpt2) {
+        const x1 = offsetX + Number(kpt1[0]) * scale
+        const y1 = offsetY + Number(kpt1[1]) * scale
+        const x2 = offsetX + Number(kpt2[0]) * scale
+        const y2 = offsetY + Number(kpt2[1]) * scale
+
+        const canvasAvg = (canvas.width + canvas.height) / (2 * dpr)
+        const lw = Math.max(1.5, canvasAvg / 250)
+        const distType: string = pheno.type || 'xy'
+
+        ctx.save()
+        ctx.setLineDash([lw * 3, lw * 2])
+        ctx.strokeStyle = 'rgba(255, 220, 0, 0.92)'
+        ctx.lineWidth = lw
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.7)'
+        ctx.shadowBlur = lw * 2
+
+        let mx: number, my: number  // label midpoint
+
+        if (distType === 'x') {
+          // Horizontal line at y-midpoint, spanning x1→x2, with vertical end-ticks
+          const ym = (y1 + y2) / 2
+          ctx.beginPath(); ctx.moveTo(x1, ym); ctx.lineTo(x2, ym); ctx.stroke()
+          ctx.setLineDash([])
+          ctx.shadowBlur = 0
+          ctx.beginPath(); ctx.moveTo(x1, ym - lw * 5); ctx.lineTo(x1, ym + lw * 5); ctx.stroke()
+          ctx.beginPath(); ctx.moveTo(x2, ym - lw * 5); ctx.lineTo(x2, ym + lw * 5); ctx.stroke()
+          mx = (x1 + x2) / 2; my = ym
+        } else if (distType === 'y') {
+          // Vertical line at x-midpoint, spanning y1→y2, with horizontal end-ticks
+          const xm = (x1 + x2) / 2
+          ctx.beginPath(); ctx.moveTo(xm, y1); ctx.lineTo(xm, y2); ctx.stroke()
+          ctx.setLineDash([])
+          ctx.shadowBlur = 0
+          ctx.beginPath(); ctx.moveTo(xm - lw * 5, y1); ctx.lineTo(xm + lw * 5, y1); ctx.stroke()
+          ctx.beginPath(); ctx.moveTo(xm - lw * 5, y2); ctx.lineTo(xm + lw * 5, y2); ctx.stroke()
+          mx = xm; my = (y1 + y2) / 2
+        } else {
+          // Euclidean: straight diagonal line
+          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke()
+          ctx.setLineDash([])
+          ctx.shadowBlur = 0
+          mx = (x1 + x2) / 2; my = (y1 + y2) / 2
+        }
+
+        // Value label pill at midpoint
+        const fs = Math.max(11, canvasAvg / 55)
+        const label = `${hovered}: ${typeof pheno.value_px === 'number' ? pheno.value_px.toFixed(1) + 'px' : '—'}`
+        ctx.font = `bold ${fs}px sans-serif`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        const tw = ctx.measureText(label).width
+        const pad = fs * 0.45
+        ctx.fillStyle = 'rgba(20, 20, 20, 0.72)'
+        ctx.beginPath()
+        ctx.roundRect(mx - tw / 2 - pad, my - fs * 0.7, tw + pad * 2, fs * 1.4, fs * 0.35)
+        ctx.fill()
+        ctx.fillStyle = 'rgba(255, 220, 0, 1)'
+        ctx.fillText(label, mx, my)
+        ctx.restore()
+      }
+    }
   }
+
 }
 
 // Track retry timer so it can be cancelled on unmount
@@ -1194,13 +1379,15 @@ async function handleSettingsSave(data: {
 
 async function handleDeleteProfile(profileId: string) {
   try {
+    const p = profiles.value.find(pr => pr.id === profileId)
+    if (p?.isBuiltIn) return
     await deleteProfile(profileId)
     profiles.value = profiles.value.filter(p => p.id !== profileId)
     
-    // If deleted profile was active, switch to default
+    // If deleted profile was active, switch to first preset
     if (activeProfileId.value === profileId) {
-      activeProfileId.value = 'default'
-      await setActiveProfile('default')
+      activeProfileId.value = PRESET_PROFILES[0].id
+      await setActiveProfile(PRESET_PROFILES[0].id)
     }
     
     infoMessage.value = 'Profile deleted'
@@ -1267,19 +1454,10 @@ async function onSetupComplete() {
     
     // Ensure at least one profile exists
     if (profiles.value.length === 0) {
-      profiles.value = [{
-        id: 'default',
-        name: 'Standard Fish',
-        description: 'All 20 keypoints',
-        selectedKeypoints: Array.from({ length: 20 }, (_, i) => i),
-        selected_keypoints: Array.from({ length: 20 }, (_, i) => i),
-        createdAt: Date.now(),
-        enabled: true,
-        folder_path: undefined,
-      }]
-      activeProfileId.value = 'default'
+      profiles.value = [...PRESET_PROFILES]
+      activeProfileId.value = PRESET_PROFILES[0].id
       // Save the default profile
-      await saveConfig({ ...config, profiles: profiles.value, activeProfileId: 'default' })
+      await saveConfig({ ...config, profiles: profiles.value, activeProfileId: PRESET_PROFILES[0].id })
     } else {
       activeProfileId.value = config.activeProfileId
     }
@@ -1294,19 +1472,10 @@ async function onSetupComplete() {
   } catch (err) {
     console.error('Failed to load config after setup, using defaults:', err)
     // Fallback to default profile if config loading completely fails
-    profiles.value = [{
-      id: 'default',
-      name: 'Standard Fish',
-      description: 'All 20 keypoints',
-      selectedKeypoints: Array.from({ length: 20 }, (_, i) => i),
-      selected_keypoints: Array.from({ length: 20 }, (_, i) => i),
-      createdAt: Date.now(),
-      enabled: true,
-      folder_path: undefined,
-    }]
-    activeProfileId.value = 'default'
-    selectedProfileFilter.value = 'default'
-    selectedKeypoints.value = new Set(Array.from({ length: 20 }, (_, i) => i))
+    profiles.value = [...PRESET_PROFILES]
+    activeProfileId.value = PRESET_PROFILES[0].id
+    selectedProfileFilter.value = PRESET_PROFILES[0].id
+    selectedKeypoints.value = new Set(PRESET_PROFILES[0].selected_keypoints)
   }
   
   // Re-initialize the app after setup
@@ -1406,19 +1575,10 @@ onMounted(async () => {
       
       // Ensure at least one profile exists
       if (profiles.value.length === 0) {
-        profiles.value = [{
-          id: 'default',
-          name: 'Standard Fish',
-          description: 'All 20 keypoints',
-          selectedKeypoints: Array.from({ length: 20 }, (_, i) => i),
-          selected_keypoints: Array.from({ length: 20 }, (_, i) => i),
-          createdAt: Date.now(),
-          enabled: true,
-          folder_path: undefined,
-        }]
-        activeProfileId.value = 'default'
+        profiles.value = [...PRESET_PROFILES]
+        activeProfileId.value = PRESET_PROFILES[0].id
         // Save the default profile
-        await saveConfig({ ...config, profiles: profiles.value, activeProfileId: 'default' })
+        await saveConfig({ ...config, profiles: profiles.value, activeProfileId: PRESET_PROFILES[0].id })
       } else {
         activeProfileId.value = config.activeProfileId
       }
@@ -1435,20 +1595,11 @@ onMounted(async () => {
       anonymousId.value = await getOrCreateAnonymousId()
     } catch (err) {
       console.error('Failed to load config, using defaults:', err)
-      // Fallback to default profile if config loading completely fails
-      profiles.value = [{
-        id: 'default',
-        name: 'Standard Fish',
-        description: 'All 20 keypoints',
-        selectedKeypoints: Array.from({ length: 20 }, (_, i) => i),
-        selected_keypoints: Array.from({ length: 20 }, (_, i) => i),
-        createdAt: Date.now(),
-        enabled: true,
-        folder_path: undefined,
-      }]
-      activeProfileId.value = 'default'
-      selectedProfileFilter.value = 'default'
-      selectedKeypoints.value = new Set(Array.from({ length: 20 }, (_, i) => i))
+      // Fallback to preset profiles if config loading completely fails
+      profiles.value = [...PRESET_PROFILES]
+      activeProfileId.value = PRESET_PROFILES[0].id
+      selectedProfileFilter.value = PRESET_PROFILES[0].id
+      selectedKeypoints.value = new Set(PRESET_PROFILES[0].selected_keypoints)
     }
 
     // Initialize backend immediately but don't block UI
@@ -1474,6 +1625,11 @@ watch(() => selectedPredictionIdx.value, async () => {
 // Reset selection when filtering by profile
 watch(() => selectedProfileFilter.value, () => {
   selectedPredictionIdx.value = 0
+})
+
+// Redraw canvas when measurement is hovered so the overlay line appears
+watch(hoveredPhenotype, () => {
+  drawPreview()
 })
 
 // Auto-draw preview when predictions become available

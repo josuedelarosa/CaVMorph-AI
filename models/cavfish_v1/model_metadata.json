@@ -50,8 +50,8 @@
       1
     ],
     [
-      3,
-      2
+      2,
+      3
     ],
     [
       4,
@@ -71,10 +71,6 @@
     ],
     [
       12,
-      3
-    ],
-    [
-      0,
       3
     ],
     [
@@ -100,6 +96,10 @@
     [
       18,
       19
+    ],
+    [
+      0,
+      3
     ]
   ],
   "phenotype_names": [
@@ -111,11 +111,12 @@
     "Ed",
     "Eh",
     "JI",
-    "PFI",
+    "PFl",
     "PFi",
     "HL",
     "DL",
-    "AL"
+    "AL",
+    "Mo"
   ],
   "phenotype_types": [
     "x",
@@ -130,7 +131,8 @@
     "y",
     "x",
     "xy",
-    "xy"
+    "xy",
+    "y"
   ],
   "phenotype_scale_by_sl": true,
   "phenotype_sl_pair": [

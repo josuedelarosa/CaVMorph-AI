@@ -38,7 +38,7 @@
                 </div>
                 <div class="profile-actions">
                   <button
-                    v-if="profile.id !== 'default'"
+                    v-if="!profile.isBuiltIn && profile.id !== 'default'"
                     class="btn-icon-danger"
                     @click.stop="deleteCurrentProfile(profile.id)"
                     title="Delete profile"
@@ -94,35 +94,104 @@
         <!-- Column divider -->
         <div class="col-divider"></div>
 
-        <!-- ─── Right column: keypoints for active profile ──────── -->
+        <!-- ─── Right column: preset cards + keypoint editor ──────── -->
         <div class="col-right">
-          <div class="col-section-title">
-            Keypoints
-            <span class="col-section-sub">for: {{ currentProfile?.name ?? '—' }}</span>
+
+          <!-- Preset reference cards -->
+          <div class="preset-reference">
+            <div class="col-section-title">
+              Preset Profiles
+              <span class="col-section-sub">built-in, always available</span>
+            </div>
+            <div class="preset-cards">
+              <div
+                v-for="preset in PRESET_DEFS"
+                :key="preset.id"
+                class="preset-card"
+                :class="{ 'preset-card-active': selectedProfileId === preset.id }"
+                @click="selectProfile(preset.id)"
+                :title="preset.description"
+              >
+                <div class="preset-card-header">
+                  <span class="preset-card-name">{{ preset.shortName }}</span>
+                  <span class="preset-card-count">{{ preset.keypoints.length }} KP</span>
+                </div>
+                <div class="preset-card-desc">{{ preset.description }}</div>
+                <div class="preset-img-wrap">
+                  <img
+                    v-if="!imgErrors[preset.id]"
+                    :src="`/presets/${preset.imgFile}`"
+                    :alt="preset.shortName"
+                    class="preset-img"
+                    @error="handleImgError(preset.id)"
+                    @click.stop="openLightbox(preset)"
+                    title="Click to enlarge"
+                  />
+                  <div v-else class="preset-img-placeholder">
+                    <span class="preset-img-placeholder-name">{{ preset.shortName }}</span>
+                    <span class="preset-img-placeholder-hint">Add <code>public/presets/{{ preset.imgFile }}</code></span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <p class="keypoint-hint">Select the landmarks to detect for this profile.</p>
-          <div class="keypoint-scroll">
-            <label
-              v-for="kp in KEYPOINT_DEFS"
-              :key="kp.id"
-              class="keypoint-row"
-              :class="{ 'kp-checked': isKeypointSelected(kp.id - 1) }"
-            >
-              <input
-                type="checkbox"
-                :checked="isKeypointSelected(kp.id - 1)"
-                @change="toggleKeypoint(kp.id - 1)"
-              />
-              <span class="kp-num">{{ kp.id }}</span>
-              <span class="kp-label">{{ kp.name }}</span>
-            </label>
+
+          <!-- Keypoint editor -->
+          <div class="keypoint-editor">
+            <div class="col-section-title">
+              Keypoints
+              <span class="col-section-sub">for: {{ currentProfile?.name ?? '—' }}</span>
+            </div>
+            <p class="keypoint-hint">Select the landmarks to detect for this profile.</p>
+            <div class="keypoint-scroll">
+              <label
+                v-for="kp in KEYPOINT_DEFS"
+                :key="kp.id"
+                class="keypoint-row"
+                :class="{ 'kp-checked': isKeypointSelected(kp.id - 1) }"
+              >
+                <input
+                  type="checkbox"
+                  :checked="isKeypointSelected(kp.id - 1)"
+                  @change="toggleKeypoint(kp.id - 1)"
+                />
+                <span class="kp-num">{{ kp.id }}</span>
+                <span class="kp-label">{{ kp.name }}</span>
+              </label>
+            </div>
+            <div class="kp-summary">
+              {{ selectedKeypoints.size }} / {{ KEYPOINT_DEFS.length }} selected
+            </div>
           </div>
-          <div class="kp-summary">
-            {{ selectedKeypoints.size }} / {{ KEYPOINT_DEFS.length }} selected
-          </div>
+
         </div><!-- /.col-right -->
 
       </div><!-- /.modal-body -->
+
+      <!-- Lightbox -->
+      <teleport to="body">
+        <div
+          v-if="zoomedPreset"
+          class="lightbox-overlay"
+          @click="closeLightbox"
+          @keydown.esc="closeLightbox"
+          tabindex="0"
+          ref="lightboxRef"
+        >
+          <div class="lightbox-inner" @click.stop>
+            <div class="lightbox-header">
+              <span class="lightbox-title">{{ zoomedPreset.shortName }}</span>
+              <button class="lightbox-close" @click="closeLightbox">×</button>
+            </div>
+            <img
+              :src="`/presets/${zoomedPreset.imgFile}`"
+              :alt="zoomedPreset.shortName"
+              class="lightbox-img"
+            />
+            <div class="lightbox-desc">{{ zoomedPreset.description }}</div>
+          </div>
+        </div>
+      </teleport>
 
       <!-- Footer -->
       <div class="modal-footer">
@@ -135,7 +204,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import type { Profile } from '../types'
 
 interface Props {
@@ -162,26 +231,51 @@ const emit = defineEmits<Emits>()
 
 // ── Anatomical keypoint definitions ──────────────────────────────────────────
 const KEYPOINT_DEFS = [
-  { id:  1, name: 'Anterior snout / upper jaw tip' },
-  { id:  2, name: 'Caudal-fin base — standard length endpoint' },
-  { id:  3, name: 'Dorsal fin origin' },
-  { id:  4, name: 'Ventral body point — body depth reference' },
-  { id:  5, name: 'Dorsal head point' },
-  { id:  6, name: 'Ventral head point' },
-  { id:  7, name: 'Dorsal caudal peduncle' },
-  { id:  8, name: 'Ventral caudal peduncle' },
-  { id:  9, name: 'Upper caudal fin tip' },
-  { id: 10, name: 'Lower caudal fin tip' },
-  { id: 11, name: 'Dorsal eye margin' },
-  { id: 12, name: 'Ventral eye margin' },
-  { id: 13, name: 'Eye center' },
-  { id: 14, name: 'Posterior jaw / corner of mouth / jaw articulation' },
-  { id: 15, name: 'Pectoral fin origin' },
-  { id: 16, name: 'Pectoral fin insertion endpoint' },
-  { id: 17, name: 'Posterior opercular margin / posterior head limit' },
-  { id: 18, name: 'Distal tip of dorsal fin' },
-  { id: 19, name: 'Anal fin origin' },
-  { id: 20, name: 'Posterior end of anal fin base' },
+  { id:  1, name: 'Tip of snout — anterior-most part of head' },
+  { id:  2, name: 'End of vertebral column — midline of caudal fin' },
+  { id:  3, name: 'Anterior insertion of the dorsal fin' },
+  { id:  4, name: 'Anterior insertion of the pelvic fin' },
+  { id:  5, name: 'Dorsal-most part vertically to the eye' },
+  { id:  6, name: 'Ventral-most part vertically to the eye' },
+  { id:  7, name: 'Dorsal insertion of the caudal fin' },
+  { id:  8, name: 'Ventral insertion of the caudal fin' },
+  { id:  9, name: 'Dorsal-most part vertically to the caudal fin' },
+  { id: 10, name: 'Ventral-most part vertically to the caudal fin' },
+  { id: 11, name: 'Dorsal-most part of eye' },
+  { id: 12, name: 'Ventral-most (lower) part of eye' },
+  { id: 13, name: 'Center (centroid) of eye' },
+  { id: 14, name: 'Corner of the mouth' },
+  { id: 15, name: 'Anterior insertion of the pectoral fin' },
+  { id: 16, name: 'Distal part of the longest ray of the pectoral fin' },
+  { id: 17, name: 'Most dorsal point of operculum — posterior-most part of head' },
+  { id: 18, name: 'Distal part of the longest ray of the dorsal fin' },
+  { id: 19, name: 'Anterior insertion of the anal fin' },
+  { id: 20, name: 'Distal part of the longest ray of the anal fin' },
+]
+
+// ── Preset profile visual definitions ────────────────────────────────────────
+const PRESET_DEFS = [
+  {
+    id: 'preset-all',
+    shortName: 'Compressed',
+    description: 'All 20 landmarks',
+    keypoints: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19],
+    imgFile: 'compressed.jpg',
+  },
+  {
+    id: 'preset-depressed',
+    shortName: 'Depressed',
+    description: 'Without corner of mouth (KP 14)',
+    keypoints: [0,1,2,3,4,5,6,7,8,9,10,11,12,14,15,16,17,18,19],
+    imgFile: 'depressed.jpg',
+  },
+  {
+    id: 'preset-no-caudal',
+    shortName: 'No Caudal Fin',
+    description: 'Without caudal fin (KP 9, 10, 14, 18)',
+    keypoints: [0,1,2,3,4,5,6,7,10,11,12,14,15,16,18,19],
+    imgFile: 'no-caudal.jpg',
+  },
 ]
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -189,6 +283,23 @@ const selectedProfileId = ref(props.activeProfileId)
 const selectedKeypoints = ref<Set<number>>(new Set())
 const newProfileName = ref('')
 const newProfileDesc = ref('')
+const imgErrors = ref<Record<string, boolean>>({})
+const zoomedPreset = ref<typeof PRESET_DEFS[0] | null>(null)
+const lightboxRef = ref<HTMLElement | null>(null)
+
+function handleImgError(presetId: string) {
+  imgErrors.value = { ...imgErrors.value, [presetId]: true }
+}
+
+async function openLightbox(preset: typeof PRESET_DEFS[0]) {
+  zoomedPreset.value = preset
+  await nextTick()
+  lightboxRef.value?.focus()
+}
+
+function closeLightbox() {
+  zoomedPreset.value = null
+}
 
 const currentProfile = computed(() =>
   props.profiles.find(p => p.id === selectedProfileId.value)
@@ -234,6 +345,8 @@ function createNewProfile() {
 }
 
 function deleteCurrentProfile(profileId: string) {
+  const p = props.profiles.find(pr => pr.id === profileId)
+  if (p?.isBuiltIn) return
   if (confirm('Delete this profile?')) emit('delete', profileId)
 }
 
@@ -290,9 +403,9 @@ loadKeypointsForProfile()
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  width: 780px;
+  width: 960px;
   max-width: 96vw;
-  max-height: 88vh;
+  max-height: 92vh;
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-overlay);
@@ -354,8 +467,204 @@ loadKeypointsForProfile()
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 16px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.preset-reference {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border-muted);
+  flex-shrink: 0;
+}
+
+.preset-cards {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.preset-card {
+  flex: 1;
+  border: 1.5px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 10px 10px 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  background: var(--bg-canvas);
+  min-width: 0;
+}
+.preset-card:hover {
+  border-color: var(--accent-blue);
+  background: var(--accent-blue-bg);
+}
+.preset-card-active {
+  border-color: var(--accent-blue);
+  background: var(--accent-blue-bg);
+  box-shadow: 0 0 0 2px var(--accent-blue-bg);
+}
+
+.preset-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 2px;
+}
+
+.preset-card-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.preset-card-count {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent-blue);
+  background: var(--accent-blue-bg);
+  border: 1px solid var(--accent-blue);
+  border-radius: 8px;
+  padding: 0 5px;
+  flex-shrink: 0;
+}
+
+.preset-card-desc {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  line-height: 1.35;
+}
+
+.preset-img-wrap {
+  width: 100%;
+  aspect-ratio: 16 / 7;
+  border-radius: var(--radius-sm);
   overflow: hidden;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-muted);
+}
+
+.preset-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  cursor: zoom-in;
+  transition: opacity 0.1s;
+}
+.preset-img:hover { opacity: 0.88; }
+
+.preset-img-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px;
+}
+
+.preset-img-placeholder-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.preset-img-placeholder-hint {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.preset-img-placeholder-hint code {
+  font-family: var(--font-mono);
+  background: var(--bg-surface-raised);
+  padding: 1px 3px;
+  border-radius: 2px;
+}
+
+/* ── Lightbox ─────────────────────────────────────────────── */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  outline: none;
+}
+
+.lightbox-inner {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+  max-width: min(900px, 92vw);
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.lightbox-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-muted);
+  background: var(--bg-panel-header);
+}
+
+.lightbox-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.lightbox-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text-muted);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: color 0.1s, background 0.1s;
+}
+.lightbox-close:hover { color: var(--text-primary); background: var(--bg-canvas); }
+
+.lightbox-img {
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  display: block;
+  background: #000;
+}
+
+.lightbox-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 10px 16px;
+  border-top: 1px solid var(--border-muted);
+  background: var(--bg-panel-header);
+}
+
+.keypoint-editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .col-divider { display: none; } /* handled by border */

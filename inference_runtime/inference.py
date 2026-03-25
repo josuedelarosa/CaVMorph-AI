@@ -234,13 +234,45 @@ class FallbackPyTorchEngine:
             device=self.device,
         )
 
-        return InferenceResult(
+        kpts_raw = pred.get("keypoints", [])
+        result = InferenceResult(
             image_path="",
-            keypoints=pred.get("keypoints", []),
+            keypoints=kpts_raw,
             keypoint_scores=pred.get("keypoint_scores", []),
             bboxes=pred.get("bboxes", []),
             bbox_scores=pred.get("bbox_scores", []),
         )
+
+        # Compute phenotypes using the same meta loaded from meta.json
+        if self._meta and kpts_raw:
+            pairs = self._meta.get("phenotype_pairs", [])
+            if pairs:
+                kpts_list = kpts_raw
+                if isinstance(kpts_list[0], list) and kpts_list[0] and isinstance(kpts_list[0][0], list):
+                    kpts_list = kpts_list[0]
+                kpts_array = np.array(kpts_list, dtype=np.float32)
+                if kpts_array.shape[0] >= 2:
+                    pheno_list = compute_phenotypes(
+                        kpts_array,
+                        pairs=pairs,
+                        scale_by_sl=self._meta.get("phenotype_scale_by_sl", False),
+                        sl_pair=self._meta.get("phenotype_sl_pair"),
+                        phenotype_names=self._meta.get("phenotype_names"),
+                        phenotype_types=self._meta.get("phenotype_types"),
+                    )
+                    result.phenotypes = [
+                        PhenotypeResult(
+                            id=p["id"],
+                            pair=p["pair"],
+                            name=p["name"],
+                            type=p["type"],
+                            value_px=p["value_px"],
+                            value_norm=p["value_norm"],
+                        )
+                        for p in pheno_list
+                    ]
+
+        return result
 
     def infer_path(self, image_path: str) -> InferenceResult:
         bgr = cv2.imread(image_path, cv2.IMREAD_COLOR)

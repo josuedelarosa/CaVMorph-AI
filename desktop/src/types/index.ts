@@ -59,6 +59,7 @@ export interface Profile {
   createdAt: number
   enabled: boolean
   folder_path?: string
+  isBuiltIn?: boolean
 }
 
 export interface AppConfig {

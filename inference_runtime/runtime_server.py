@@ -147,17 +147,83 @@ def _export_csv(path: str, predictions: list, meta_dict: dict):
     try:
         from backend.cavfish.export import export_csv
         export_csv(path, predictions, meta_dict)
+        return
     except ImportError:
-        # Minimal inline CSV export
-        import csv
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        if not predictions:
-            return
-        with open(path, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["image_path", "raw_prediction"])
-            for pred in predictions:
-                writer.writerow([pred.get("image_path", ""), json.dumps(pred)])
+        pass
+
+    # Inline structured CSV export (mirrors backend/cavfish/export.py)
+    import csv as _csv
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    if not predictions:
+        return
+
+    first_pred = predictions[0]
+
+    # Determine keypoint column names from first prediction
+    kpts_first = first_pred.get("keypoints", [])
+    if isinstance(kpts_first, list) and kpts_first and isinstance(kpts_first[0], dict):
+        # Dict format (profile-filtered): [{x, y, name, score}, ...]
+        kp_names = [kpt.get("name", f"kp{i + 1}") for i, kpt in enumerate(kpts_first)]
+    else:
+        # Array format: flatten [[[x,y],...]] → [[x,y],...]
+        if (isinstance(kpts_first, list) and kpts_first
+                and isinstance(kpts_first[0], list) and kpts_first[0]
+                and isinstance(kpts_first[0][0], list)):
+            kpts_first = kpts_first[0]
+        kp_names = [f"kp{i + 1}" for i in range(len(kpts_first))]
+
+    # Phenotype columns from first prediction (already profile-filtered)
+    phenotypes_first = first_pred.get("extra_pred_fields", {}).get("phenotypes", [])
+
+    fieldnames = ["image_path"]
+    for name in kp_names:
+        fieldnames.extend([f"{name}_x", f"{name}_y"])
+    for ph in phenotypes_first:
+        fieldnames.append(f"{ph.get('name', f'pheno_{ph.get(chr(105), 0)}')}_px")
+
+    with open(path, "w", newline="") as f:
+        writer = _csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for pred in predictions:
+            row: dict = {"image_path": pred.get("image_path", "")}
+
+            kpts = pred.get("keypoints", [])
+
+            if isinstance(kpts, list) and kpts and isinstance(kpts[0], dict):
+                # Dict format (profile-filtered keypoints)
+                for i, name in enumerate(kp_names):
+                    if i < len(kpts):
+                        row[f"{name}_x"] = float(kpts[i].get("x", "")) if kpts[i].get("x") is not None else ""
+                        row[f"{name}_y"] = float(kpts[i].get("y", "")) if kpts[i].get("y") is not None else ""
+                    else:
+                        row[f"{name}_x"] = ""
+                        row[f"{name}_y"] = ""
+            else:
+                # Array format: flatten if nested
+                if (isinstance(kpts, list) and kpts
+                        and isinstance(kpts[0], list) and kpts[0]
+                        and isinstance(kpts[0][0], list)):
+                    kpts = kpts[0]
+                for i, name in enumerate(kp_names):
+                    if i < len(kpts):
+                        kpt = kpts[i]
+                        if isinstance(kpt, (list, tuple)) and len(kpt) >= 2:
+                            row[f"{name}_x"] = float(kpt[0])
+                            row[f"{name}_y"] = float(kpt[1])
+                        else:
+                            row[f"{name}_x"] = ""
+                            row[f"{name}_y"] = ""
+                    else:
+                        row[f"{name}_x"] = ""
+                        row[f"{name}_y"] = ""
+
+            for ph in pred.get("extra_pred_fields", {}).get("phenotypes", []):
+                col = f"{ph.get('name', f'pheno_{ph.get(chr(105), 0)}')}_px"
+                if col in fieldnames:
+                    row[col] = ph.get("value_px", "")
+
+            writer.writerow(row)
 
 
 def _export_json(path: str, predictions: list):

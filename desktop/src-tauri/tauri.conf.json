@@ -19,6 +19,7 @@
       },
       "shell": {
         "sidecar": true,
+        "open": true,
         "scope": [
           {
             "name": "fish_backend",

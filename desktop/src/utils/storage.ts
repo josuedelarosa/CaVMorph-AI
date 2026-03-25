@@ -4,20 +4,46 @@ import type { AppConfig, Profile } from '../types'
 
 const CONFIG_FILE = 'fish_morphometrics_config.json'
 
-const DEFAULT_CONFIG: AppConfig = {
-  activeProfileId: 'default',
-  profiles: [
-    {
-      id: 'default',
-      name: 'Standard Fish',
-      description: 'All 20 keypoints',
-      selectedKeypoints: Array.from({ length: 20 }, (_, i) => i),
-      selected_keypoints: Array.from({ length: 20 }, (_, i) => i),
-      createdAt: Date.now(),
-      enabled: true,
-      folder_path: undefined,
-    },
-  ],
+// Built-in preset profiles — always available, cannot be deleted
+export const PRESET_PROFILES: import('../types').Profile[] = [
+  {
+    id: 'preset-all',
+    name: 'Compressed',
+    description: 'All 20 landmarks for compressed body morphology',
+    selectedKeypoints: Array.from({ length: 20 }, (_, i) => i),
+    selected_keypoints: Array.from({ length: 20 }, (_, i) => i),
+    createdAt: 0,
+    enabled: true,
+    folder_path: undefined,
+    isBuiltIn: true,
+  },
+  {
+    id: 'preset-depressed',
+    name: 'Depressed',
+    description: 'Depressed morphology (no corner of mouth, KP 14)',
+    selectedKeypoints: [0,1,2,3,4,5,6,7,8,9,10,11,12,14,15,16,17,18,19],
+    selected_keypoints: [0,1,2,3,4,5,6,7,8,9,10,11,12,14,15,16,17,18,19],
+    createdAt: 0,
+    enabled: true,
+    folder_path: undefined,
+    isBuiltIn: true,
+  },
+  {
+    id: 'preset-no-caudal',
+    name: 'No Caudal Fin',
+    description: 'Without caudal fin (no KP 9, 10, 14, 18)',
+    selectedKeypoints: [0,1,2,3,4,5,6,7,10,11,12,14,15,16,18,19],
+    selected_keypoints: [0,1,2,3,4,5,6,7,10,11,12,14,15,16,18,19],
+    createdAt: 0,
+    enabled: true,
+    folder_path: undefined,
+    isBuiltIn: true,
+  },
+]
+
+const DEFAULT_CONFIG: import('../types').AppConfig = {
+  activeProfileId: 'preset-all',
+  profiles: PRESET_PROFILES,
   darkMode: false,
   contributionOptIn: false,
   anonymousId: '',
@@ -54,7 +80,15 @@ export async function loadConfig(): Promise<AppConfig> {
     await ensureConfigDir()
     const path = await getConfigPath()
     const content = await readTextFile(path)
-    return JSON.parse(content)
+    const saved: AppConfig = JSON.parse(content)
+    // Always ensure preset profiles are present (and up-to-date)
+    const userProfiles = saved.profiles.filter(p => !p.isBuiltIn && p.id !== 'default')
+    saved.profiles = [...PRESET_PROFILES, ...userProfiles]
+    // If saved activeProfileId no longer exists, fall back to first preset
+    if (!saved.profiles.some(p => p.id === saved.activeProfileId)) {
+      saved.activeProfileId = PRESET_PROFILES[0].id
+    }
+    return saved
   } catch {
     return DEFAULT_CONFIG
   }

@@ -35,6 +35,15 @@
             <div class="path-box"><code>~/Documents/PhenoAI/</code></div>
             <p>Each export includes annotated images, phenotype measurements, and profile metadata.</p>
           </div>
+
+          <div class="col-section">
+            <h2>About</h2>
+            <p>Based on the paper:</p>
+            <button class="paper-link" @click="openLink('https://doi.org/10.1038/s41597-025-04868-0')">
+              Morphological trait database for Neotropical freshwater fishes powered from artificial intelligence
+            </button>
+            <p class="paper-authors">Poveda-Cuellar, J.L.; Rodríguez-de la Rosa, J.; Martínez-Carrillo, F.; García-Melo, J.E.; García-Melo, L.J.; Marchant, S. &amp; Reu, B.</p>
+          </div>
         </div>
 
         <!-- Divider -->
@@ -66,6 +75,16 @@
               </ul>
             </div>
           </div>
+
+          <div class="col-section">
+            <h2>Contact &amp; Feedback</h2>
+            <p class="about-maintainers">Developed and maintained by <strong>Josué Rodríguez-de la Rosa</strong> &amp; <strong>Jose Luis Poveda-Cuellar</strong>.</p>
+            <p>Questions, bug reports, or feedback are welcome:</p>
+            <p class="contact-emails">
+              <button class="contact-link" @click="openLink('mailto:josueferjr2@gmail.com')">josueferjr2@gmail.com</button>,
+              <button class="contact-link" @click="openLink('mailto:josepovedaut@gmail.com')">josepovedaut@gmail.com</button>
+            </p>
+          </div>
         </div>
 
       </div><!-- /.welcome-body -->
@@ -83,6 +102,11 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { open as shellOpen } from '@tauri-apps/api/shell'
+
+function openLink(url: string) {
+  shellOpen(url)
+}
 
 const props = defineProps<{
   show: boolean
@@ -405,4 +429,61 @@ const handleClose = () => {
 }
 
 .start-btn:hover { background: #2560d4; }
+
+/* ── Contact ─────────────────────────────────────────────── */
+.contact-emails {
+  margin: 4px 0 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.contact-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--accent-blue);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-family: var(--font-mono);
+}
+.contact-link:hover {
+  color: var(--accent-blue-hover, #78b8ff);
+}
+
+/* ── About / Credits ─────────────────────────────────────── */
+.about-maintainers {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 8px 0;
+  line-height: 1.55;
+}
+.paper-link {
+  display: block;
+  background: none;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-blue);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  line-height: 1.5;
+  width: 100%;
+  margin-bottom: 6px;
+}
+.paper-link:hover {
+  background: var(--bg-canvas);
+  color: var(--accent-blue-hover, #78b8ff);
+}
+.paper-authors {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.55;
+  font-style: italic;
+}
 </style>
