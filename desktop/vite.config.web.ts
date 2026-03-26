@@ -11,6 +11,10 @@ import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
   plugins: [vue()],
+  // Sub-path deployment: nginx serves the app at /phenoai-web/.
+  // Setting base here makes Vite prefix all asset URLs with /phenoai-web/
+  // and sets import.meta.env.BASE_URL to '/phenoai-web/' at runtime.
+  base: '/phenoai-web/',
   define: {
     // Ensure __TAURI__ is NOT defined so isTauri evaluates to false
     // (Tauri plugin injects it automatically; in web build it won't exist)

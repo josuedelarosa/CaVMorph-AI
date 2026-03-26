@@ -31,9 +31,14 @@ export async function getBackendUrl(): Promise<string> {
     } catch { /* fall through */ }
     _cachedBackendUrl = 'http://127.0.0.1:8008'
   } else {
-    // Web mode — API is same-origin (FastAPI serves the SPA)
+    // Web mode — API is same-origin (FastAPI serves the SPA).
+    // When deployed under a sub-path (e.g. /phenoai-web/), Vite sets
+    // import.meta.env.BASE_URL to that prefix so API calls go to the
+    // right path and nginx can proxy them correctly.
+    const base = ((import.meta as any).env?.BASE_URL || '/').replace(/\/$/, '')
     _cachedBackendUrl =
-      (import.meta as any).env?.VITE_API_BASE_URL || window.location.origin
+      (import.meta as any).env?.VITE_API_BASE_URL ||
+      window.location.origin + base
   }
   return _cachedBackendUrl!
 }
