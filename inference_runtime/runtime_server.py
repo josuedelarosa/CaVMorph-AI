@@ -11,14 +11,21 @@ import base64
 import json
 import logging
 import os
+import shutil
 import sys
+import tempfile
+import uuid
+import zipfile
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 # Add parent dir to path for imports
@@ -592,6 +599,154 @@ def export_annotated(req: ExportAnnotatedImagesReq) -> Dict[str, Any]:
         return {"ok": True, "output_dir": req.output_dir}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --------------------------------------------------
+# Web deployment: upload, file serving, download exports
+# --------------------------------------------------
+_UPLOAD_ROOT = Path(os.environ.get("PHENOAI_UPLOAD_DIR", tempfile.gettempdir())) / "phenoai_uploads"
+_UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+
+# Allowed base directories for file serving (security: prevent path traversal)
+_ALLOWED_ROOTS: List[Path] = [
+    _UPLOAD_ROOT.resolve(),
+    (MODEL_DIR / "tmp").resolve(),
+]
+
+
+def _is_safe_path(requested: Path) -> bool:
+    """Return True only if *requested* lives under an allowed root."""
+    rp = requested.resolve()
+    return any(rp == root or str(rp).startswith(str(root) + os.sep) for root in _ALLOWED_ROOTS)
+
+
+@app.post("/upload")
+async def upload_files(files: List[UploadFile] = File(...)):
+    """Accept uploaded images, store in a session subdirectory, return paths."""
+    session_id = uuid.uuid4().hex[:12]
+    session_dir = _UPLOAD_ROOT / session_id
+    session_dir.mkdir(parents=True, exist_ok=True)
+
+    result_files = []
+    for f in files:
+        # Sanitize filename — strip directory components
+        safe_name = Path(f.filename or "unnamed").name
+        if not safe_name:
+            continue
+        dest = session_dir / safe_name
+        with open(dest, "wb") as out:
+            content = await f.read()
+            out.write(content)
+        result_files.append({
+            "name": safe_name,
+            "path": str(dest),
+            "size": dest.stat().st_size,
+        })
+    return {"upload_dir": str(session_dir), "files": result_files}
+
+
+@app.get("/files")
+def serve_file(path: str = Query(..., description="Absolute file path to serve")):
+    """Serve a file from allowed directories (uploads or overlay tmp).
+
+    Security: validates the resolved path is under an allowed root to
+    prevent directory traversal attacks.
+    """
+    p = Path(path)
+    if not p.is_absolute():
+        raise HTTPException(status_code=400, detail="Absolute path required")
+    if not _is_safe_path(p):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not p.exists() or not p.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Determine MIME type
+    ext = p.suffix.lower()
+    media_types = {
+        ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".png": "image/png", ".bmp": "image/bmp",
+        ".tif": "image/tiff", ".tiff": "image/tiff",
+        ".webp": "image/webp",
+    }
+    media_type = media_types.get(ext, "application/octet-stream")
+    return FileResponse(str(p), media_type=media_type)
+
+
+class DownloadExportReq(BaseModel):
+    predictions: List[Dict[str, Any]]
+    profile_name: str = "results"
+
+
+@app.post("/export/csv/download")
+def download_csv(req: DownloadExportReq):
+    """Generate CSV and return it as a downloadable file."""
+    tmp = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
+    tmp.close()
+    try:
+        _export_csv(tmp.name, req.predictions, meta)
+        return FileResponse(
+            tmp.name,
+            media_type="text/csv",
+            filename=f"{req.profile_name}_results.csv",
+        )
+    except Exception as e:
+        os.unlink(tmp.name)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/export/json/download")
+def download_json(req: DownloadExportReq):
+    """Generate JSON and return it as a downloadable file."""
+    tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+    tmp.close()
+    try:
+        _export_json(tmp.name, req.predictions)
+        return FileResponse(
+            tmp.name,
+            media_type="application/json",
+            filename=f"{req.profile_name}_results.json",
+        )
+    except Exception as e:
+        os.unlink(tmp.name)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/export/images/download")
+def download_images(req: DownloadExportReq):
+    """Generate annotated images and return them as a ZIP download."""
+    tmp_dir = tempfile.mkdtemp(prefix="phenoai_export_")
+    try:
+        _export_annotated_images(tmp_dir, req.predictions)
+
+        # Build ZIP in memory
+        buf = BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for img_file in Path(tmp_dir).iterdir():
+                if img_file.is_file():
+                    zf.write(img_file, img_file.name)
+        buf.seek(0)
+
+        # Clean up temp dir
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+        return StreamingResponse(
+            buf,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{req.profile_name}_annotated.zip"'},
+        )
+    except Exception as e:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --------------------------------------------------
+# Static file serving for the Vue SPA (web deployment)
+# --------------------------------------------------
+_STATIC_DIR = Path(os.environ.get("PHENOAI_STATIC_DIR", ""))
+if _STATIC_DIR.is_dir() and (_STATIC_DIR / "index.html").exists():
+    # Mount MUST come after all API routes so API endpoints take priority
+    app.mount("/", StaticFiles(directory=str(_STATIC_DIR), html=True), name="spa")
+    logger.info("Serving SPA from: %s", _STATIC_DIR)
 
 
 # --------------------------------------------------

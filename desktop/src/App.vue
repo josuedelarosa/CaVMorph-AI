@@ -443,11 +443,16 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { invoke, convertFileSrc } from '@tauri-apps/api/tauri'
-import { open } from '@tauri-apps/api/dialog'
-import { open as shellOpen } from '@tauri-apps/api/shell'
-import { readBinaryFile } from '@tauri-apps/api/fs'
-import { homeDir } from '@tauri-apps/api/path'
+import {
+  isTauri,
+  openDialog,
+  openExternal,
+  readBinaryFile,
+  resolveImageUrl,
+  homeDir,
+  tauriInvoke,
+  getBackendUrl as platformGetBackendUrl,
+} from './utils/platform'
 import type { PredictionResult, ModelInfo, AnalysisState, Profile } from './types'
 import { 
   analyzeFolder, 
@@ -455,6 +460,7 @@ import {
   exportCSV, 
   exportJSON, 
   exportAnnotatedImages,
+  downloadExport,
   resetBackendUrl 
 } from './utils/api'
 import SettingsModal from './components/SettingsModal.vue'
@@ -496,7 +502,7 @@ const showSettings = ref(false)
 const showMeasuresDiagram = ref(false)
 
 function openPhotafishArticle() {
-  shellOpen('https://www.mapress.com/zt/article/view/zootaxa.4554.1.4')
+  openExternal('https://www.mapress.com/zt/article/view/zootaxa.4554.1.4')
 }
 const showConfTip = ref(false)
 const confTipX = ref(0)
@@ -743,10 +749,9 @@ function getFilename(path: string): string {
   return path.split('/').pop() || path
 }
 
-function getImageDataUrl(imagePath: string): string {
-  // Convert file path to Tauri asset protocol URL for secure loading
+async function getImageDataUrl(imagePath: string): Promise<string> {
   if (!imagePath) return ''
-  return convertFileSrc(imagePath)
+  return resolveImageUrl(imagePath)
 }
 
 function getPhenotypeValue(pred: PredictionResult, phenotypeName: string): string {
@@ -798,7 +803,7 @@ function deselectImage(idx: number) {
 
 async function selectFolderForProfile(profileId: string) {
   try {
-    const selected = await open({
+    const selected = await openDialog({
       directory: true,
       multiple: false,
     })
@@ -985,10 +990,18 @@ async function exportResults(format: 'csv' | 'json' | 'images') {
       // Filter predictions to only include selected keypoints and phenotypes
       const filteredPreds = profilePreds.map(pred => filterPredictionsByProfile(pred, profile))
 
+      if (!isTauri) {
+        // Web mode — download via browser
+        await downloadExport(format, filteredPreds, profile.name)
+        infoMessage.value = `Downloaded ${profile.name} ${format.toUpperCase()} export`
+        continue
+      }
+
+      // Tauri desktop — write to filesystem
       let outputPath = ''
 
       if (format === 'images') {
-        const baseDir = await open({
+        const baseDir = await openDialog({
           directory: true,
           defaultPath: profile.folder_path,
         })
@@ -1098,7 +1111,8 @@ function drawPreview() {
   const img = new Image()
   img.onload = () => drawLoadedImage(img)
   img.onerror = () => drawFallbackGray()
-  img.src = convertFileSrc(imagePath)
+  img.crossOrigin = 'anonymous'
+  resolveImageUrl(imagePath).then(url => { img.src = url })
 }
 
 function drawKeypointsOnCanvas(
@@ -1279,8 +1293,10 @@ async function initializeBackend() {
   
   const attemptConnection = async () => {
     try {
-      // Force backend startup and URL registration before the first HTTP call.
-      await invoke<string>('ensure_backend_running')
+      // In Tauri mode, force backend startup and URL registration before the first HTTP call.
+      if (isTauri) {
+        await tauriInvoke<string>('ensure_backend_running')
+      }
 
       // Show status in UI
       if (retries > 0) {
@@ -1398,8 +1414,9 @@ async function handleDeleteProfile(profileId: string) {
 
 // Setup handlers
 async function checkIfSetupNeeded(): Promise<boolean> {
+  if (!isTauri) return false  // Web mode — backend is pre-configured
   try {
-    return await invoke<boolean>('check_setup_needed')
+    return await tauriInvoke<boolean>('check_setup_needed')
   } catch (err) {
     console.error('Failed to check setup status:', err)
     // Assume setup is NOT needed if we can't check (dev mode)

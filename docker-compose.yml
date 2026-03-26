@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  phenoai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: phenoai-web
+    restart: unless-stopped
+    ports:
+      - "${PHENOAI_PORT:-8008}:8008"
+    environment:
+      - FISH_MODEL_DIR=/app/models/cavfish_v1
+      - PHENOAI_STATIC_DIR=/app/static
+      - PHENOAI_HOST=0.0.0.0
+      - PHENOAI_PORT=8008
+      - PHENOAI_UPLOAD_DIR=/app/uploads
+      # Set to "cpu" or "cuda" depending on the host
+      - FISH_DEVICE=${FISH_DEVICE:-cpu}
+    volumes:
+      # Persist uploads across container restarts (optional)
+      - phenoai-uploads:/app/uploads
+
+volumes:
+  phenoai-uploads:

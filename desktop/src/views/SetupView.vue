@@ -134,8 +134,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { invoke } from '@tauri-apps/api/tauri'
-import { listen } from '@tauri-apps/api/event'
+import { isTauri, tauriInvoke, tauriListen } from '../utils/platform'
 
 const emit = defineEmits<{
   (e: 'setup-complete'): void
@@ -181,23 +180,32 @@ const addLog = (message: string, level: LogEntry['level'] = 'info') => {
 
 // ----- Environment pre-checks -----
 const checkEnvironment = async () => {
+  if (!isTauri) {
+    // Web mode — skip environment checks, backend is pre-configured
+    pythonPath.value = 'web-mode'
+    depsInstalled.value = true
+    modelDir.value = 'web-mode'
+    runtimeDir.value = 'web-mode'
+    return
+  }
+
   try {
-    const py = await invoke<string>('check_python_installed')
+    const py = await tauriInvoke<string>('check_python_installed')
     pythonPath.value = py
   } catch { pythonPath.value = '' }
 
   try {
-    const ok = await invoke<boolean>('check_onnx_dependencies')
+    const ok = await tauriInvoke<boolean>('check_onnx_dependencies')
     depsInstalled.value = ok
   } catch { depsInstalled.value = false }
 
   try {
-    const dir = await invoke<string>('check_model_available')
+    const dir = await tauriInvoke<string>('check_model_available')
     modelDir.value = dir
   } catch { modelDir.value = '' }
 
   try {
-    const dir = await invoke<string>('check_runtime_available')
+    const dir = await tauriInvoke<string>('check_runtime_available')
     runtimeDir.value = dir
   } catch { runtimeDir.value = '' }
 }
@@ -209,19 +217,19 @@ const runSetup = async () => {
   addLog('Starting PhenoAI setup…', 'info')
 
   // Register event listeners
-  await listen('setup-progress', (event: any) => {
-    const { step, message, level } = event.payload
+  await tauriListen('setup-progress', (payload: any) => {
+    const { step, message, level } = payload
     if (step !== undefined) currentStep.value = step
     if (message) { addLog(message, level || 'info'); statusMessage.value = message }
   })
-  await listen('setup-complete', () => {
+  await tauriListen('setup-complete', () => {
     setupComplete.value = true
     statusMessage.value = 'Setup complete! Ready to start.'
     addLog('✓ Setup completed successfully!', 'success')
   })
-  await listen('setup-error', (event: any) => {
-    const message = typeof event.payload === 'string'
-      ? event.payload : (event.payload?.message || 'Unknown setup error')
+  await tauriListen('setup-error', (payload: any) => {
+    const message = typeof payload === 'string'
+      ? payload : (payload?.message || 'Unknown setup error')
     setupError.value = true
     steps.value[currentStep.value].error = true
     statusMessage.value = `Error: ${message}`
@@ -229,7 +237,7 @@ const runSetup = async () => {
   })
 
   try {
-    await invoke('run_first_time_setup')
+    await tauriInvoke('run_first_time_setup')
   } catch (error) {
     setupError.value = true
     statusMessage.value = `Setup failed: ${error}`
@@ -249,7 +257,7 @@ const retrySetup = () => {
 }
 
 const openLogs = async () => {
-  try { await invoke('open_setup_logs') } catch (e) { console.error('Failed to open logs:', e) }
+  try { await tauriInvoke('open_setup_logs') } catch (e) { console.error('Failed to open logs:', e) }
 }
 
 const startApp = async () => {
@@ -259,7 +267,7 @@ const startApp = async () => {
     statusMessage.value = 'Starting backend…'
     addLog('Starting backend server…', 'info')
 
-    const url = await invoke<string>('ensure_backend_running')
+    const url = await tauriInvoke<string>('ensure_backend_running')
     addLog(`Backend is running at ${url}`, 'success')
     statusMessage.value = 'Backend started successfully.'
 

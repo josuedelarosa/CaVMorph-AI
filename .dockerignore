@@ -1,0 +1,14 @@
+# Keep Docker build context small
+desktop/node_modules/
+desktop/dist/
+desktop/src-tauri/target/
+desktop/.vite/
+__pycache__/
+*.pyc
+.git/
+*.dmg
+*.app
+backend/
+backend/__pycache__/
+*.pth
+.DS_Store

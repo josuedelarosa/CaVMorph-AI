@@ -1,5 +1,4 @@
-import { fetch as tauriFetch, ResponseType, Body } from '@tauri-apps/api/http'
-import { readBinaryFile } from '@tauri-apps/api/fs'
+import { platformFetch, readBinaryFile } from './platform'
 import type { PredictionResult } from '../types'
 
 export const COLLECTION_URL = 'https://bivl2ab.uis.edu.co/phenoai/api/v1/contribute'
@@ -88,11 +87,10 @@ async function uploadOne(
     })) ?? []
   )
 
-  const response = await tauriFetch(COLLECTION_URL, {
+  const response = await platformFetch(COLLECTION_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    responseType: ResponseType.Text,
-    body: Body.json({
+    responseType: 'text',
+    body: {
       anonymous_id: anonymousId,
       app_version: APP_VERSION,
       model_version: 'cavfish_v1',
@@ -103,7 +101,7 @@ async function uploadOne(
       keypoints: sanitizeFloats(prediction.keypoints),
       keypoint_scores: sanitizeFloats(prediction.keypoint_scores),
       phenotypes,
-    }),
+    },
     timeout: 60,
   })
 

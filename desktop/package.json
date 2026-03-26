@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:web": "vite --config vite.config.web.ts",
     "build": "vite build",
+    "build:web": "vite build --config vite.config.web.ts",
     "preview": "vite preview",
     "tauri": "node ./scripts/tauri-wrapper.mjs",
     "tauri:dev": "node ./scripts/tauri-wrapper.mjs dev",

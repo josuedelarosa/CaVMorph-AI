@@ -102,10 +102,10 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { open as shellOpen } from '@tauri-apps/api/shell'
+import { openExternal } from '../utils/platform'
 
 function openLink(url: string) {
-  shellOpen(url)
+  openExternal(url)
 }
 
 const props = defineProps<{

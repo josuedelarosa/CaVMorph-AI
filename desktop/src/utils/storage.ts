@@ -1,8 +1,14 @@
-import { appDataDir } from '@tauri-apps/api/path'
-import { readTextFile, writeTextFile, createDir } from '@tauri-apps/api/fs'
+import {
+  isTauri,
+  appDataDir,
+  readTextFile,
+  writeTextFile,
+  createDir,
+} from './platform'
 import type { AppConfig, Profile } from '../types'
 
 const CONFIG_FILE = 'fish_morphometrics_config.json'
+const LOCAL_STORAGE_KEY = 'phenoai_config'
 
 // Built-in preset profiles — always available, cannot be deleted
 export const PRESET_PROFILES: import('../types').Profile[] = [
@@ -76,6 +82,24 @@ async function ensureConfigDir(): Promise<void> {
 }
 
 export async function loadConfig(): Promise<AppConfig> {
+  if (!isTauri) {
+    // Web mode — use localStorage
+    try {
+      const raw = localStorage.getItem(LOCAL_STORAGE_KEY)
+      if (raw) {
+        const saved: AppConfig = JSON.parse(raw)
+        const userProfiles = saved.profiles.filter(p => !p.isBuiltIn && p.id !== 'default')
+        saved.profiles = [...PRESET_PROFILES, ...userProfiles]
+        if (!saved.profiles.some(p => p.id === saved.activeProfileId)) {
+          saved.activeProfileId = PRESET_PROFILES[0].id
+        }
+        return saved
+      }
+    } catch { /* fall through */ }
+    return DEFAULT_CONFIG
+  }
+
+  // Tauri mode — filesystem
   try {
     await ensureConfigDir()
     const path = await getConfigPath()
@@ -95,6 +119,13 @@ export async function loadConfig(): Promise<AppConfig> {
 }
 
 export async function saveConfig(config: AppConfig): Promise<void> {
+  if (!isTauri) {
+    // Web mode — localStorage
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(config))
+    return
+  }
+
+  // Tauri mode — filesystem
   await ensureConfigDir()
   const path = await getConfigPath()
   await writeTextFile(path, JSON.stringify(config, null, 2))
