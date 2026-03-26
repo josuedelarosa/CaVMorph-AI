@@ -380,7 +380,12 @@ def _scale_resp_to_original(resp: Dict[str, Any], scale: float) -> None:
 # Endpoints (same contract as legacy backend)
 # --------------------------------------------------
 @app.get("/")
-def root() -> Dict[str, Any]:
+def root():
+    """Serve the Vue SPA when available, otherwise return JSON health info."""
+    _STATIC_DIR = Path(os.environ.get("PHENOAI_STATIC_DIR", ""))
+    index = _STATIC_DIR / "index.html"
+    if index.is_file():
+        return FileResponse(str(index), media_type="text/html")
     return {
         "ok": True,
         "service": "phenoai-inference-runtime",
@@ -762,13 +767,29 @@ def download_images(req: DownloadExportReq):
 
 
 # --------------------------------------------------
-# Static file serving for the Vue SPA (web deployment)
+# Static assets + SPA catch-all (web deployment)
 # --------------------------------------------------
-_STATIC_DIR = Path(os.environ.get("PHENOAI_STATIC_DIR", ""))
-if _STATIC_DIR.is_dir() and (_STATIC_DIR / "index.html").exists():
-    # Mount MUST come after all API routes so API endpoints take priority
-    app.mount("/", StaticFiles(directory=str(_STATIC_DIR), html=True), name="spa")
-    logger.info("Serving SPA from: %s", _STATIC_DIR)
+_STATIC_DIR_VAL = Path(os.environ.get("PHENOAI_STATIC_DIR", ""))
+if _STATIC_DIR_VAL.is_dir() and (_STATIC_DIR_VAL / "index.html").exists():
+    # Serve /assets/, /favicon.ico, etc. from the built SPA directory.
+    # This mount only matches paths that correspond to real files — unknown
+    # paths fall through to the catch-all route below.
+    app.mount("/assets", StaticFiles(directory=str(_STATIC_DIR_VAL / "assets")), name="spa-assets")
+    logger.info("Serving SPA from: %s", _STATIC_DIR_VAL)
+
+
+@app.get("/{full_path:path}")
+def spa_catchall(full_path: str):
+    """Return index.html for all unknown paths so Vue Router history mode works."""
+    _sd = Path(os.environ.get("PHENOAI_STATIC_DIR", ""))
+    # Try to serve the exact file first (e.g. favicon.ico at root)
+    candidate = _sd / full_path
+    if candidate.is_file():
+        return FileResponse(str(candidate))
+    index = _sd / "index.html"
+    if index.is_file():
+        return FileResponse(str(index), media_type="text/html")
+    raise HTTPException(status_code=404, detail="Not found")
 
 
 # --------------------------------------------------
