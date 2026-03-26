@@ -12,6 +12,7 @@
     <!-- ─── Header ──────────────────────────────────────────────── -->
     <header class="app-header">
       <div class="header-brand">
+        <button class="mobile-menu-btn" @click="mobileDrawerOpen = !mobileDrawerOpen" aria-label="Open menu">☰</button>
         <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <ellipse cx="12" cy="12" rx="9" ry="5.5"/>
           <circle cx="8.5" cy="12" r="1.5" fill="currentColor" stroke="none"/>
@@ -28,8 +29,15 @@
     <!-- ─── App Body: Left Panel + Workspace ─────────────────── -->
     <div class="app-body">
 
+      <!-- Drawer backdrop (mobile) -->
+      <div
+        class="drawer-backdrop"
+        :class="{ visible: mobileDrawerOpen }"
+        @click="mobileDrawerOpen = false"
+      ></div>
+
       <!-- Left Control Panel ─────────────────────────────────── -->
-      <aside class="left-panel">
+      <aside class="left-panel" :class="{ 'drawer-open': mobileDrawerOpen }">
 
         <!-- Banners -->
         <div v-if="errorMessage" class="panel-alert panel-alert-error">
@@ -404,7 +412,7 @@
           <button class="measures-lightbox-close" @click="showMeasuresDiagram = false">&times;</button>
         </div>
         <img
-          src="/measures-diagram.jpg"
+          :src="`${baseUrl}measures-diagram.jpg`"
           alt="Measurements diagram"
           class="measures-lightbox-img"
         />
@@ -500,6 +508,8 @@ const backendReady = ref(false)
 const previewCanvas = ref<HTMLCanvasElement | null>(null)
 const showSettings = ref(false)
 const showMeasuresDiagram = ref(false)
+const mobileDrawerOpen = ref(false)
+const baseUrl = (import.meta as any).env?.BASE_URL || '/'
 
 function openPhotafishArticle() {
   openExternal('https://www.mapress.com/zt/article/view/zootaxa.4554.1.4')
@@ -838,6 +848,7 @@ async function clearFolderForProfile(profileId: string) {
 }
 
 async function startAnalysis() {
+  mobileDrawerOpen.value = false
   const activeFolders = profiles.value.filter(p => p.folder_path)
   if (activeFolders.length === 0) {
     errorMessage.value = 'Please select at least one folder for a profile'

@@ -486,4 +486,33 @@ const handleClose = () => {
   line-height: 1.55;
   font-style: italic;
 }
+
+/* ── Mobile (≤ 768px) ─────────────────────────────────────── */
+@media (max-width: 768px) {
+  .welcome-overlay { padding: 0; }
+
+  .welcome-modal {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    border-radius: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .welcome-body { flex-direction: column; overflow-y: auto; }
+  .col-divider { display: none; }
+  .welcome-col { padding: 20px 16px 16px; gap: 16px; overflow: visible; }
+
+  .welcome-footer {
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    position: sticky;
+    bottom: 0;
+    background: var(--bg-panel-header);
+  }
+  .start-btn { width: 100%; min-height: 44px; text-align: center; }
+}
 </style>

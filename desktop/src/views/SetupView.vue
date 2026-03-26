@@ -410,4 +410,14 @@ onMounted(() => { checkEnvironment() })
   border-color: var(--border-default, #30363d);
 }
 .btn-secondary:hover { background: var(--bg-surface-raised, #1c2129); }
+
+/* ── Mobile (≤ 768px) ─────────────────────────────────────── */
+@media (max-width: 768px) {
+  .setup-container { padding: 12px; }
+  .setup-card { padding: 20px 16px; max-width: 100%; }
+  .header h1 { font-size: 16px; }
+  .steps-grid { grid-template-columns: 1fr !important; }
+  .btn-primary, .btn-secondary { min-height: 44px; padding: 10px 20px; font-size: 14px; }
+  .actions { flex-direction: column; }
+}
 </style>

@@ -120,7 +120,7 @@
                 <div class="preset-img-wrap">
                   <img
                     v-if="!imgErrors[preset.id]"
-                    :src="`/presets/${preset.imgFile}`"
+                    :src="`${baseUrl}presets/${preset.imgFile}`"
                     :alt="preset.shortName"
                     class="preset-img"
                     @error="handleImgError(preset.id)"
@@ -184,7 +184,7 @@
               <button class="lightbox-close" @click="closeLightbox">×</button>
             </div>
             <img
-              :src="`/presets/${zoomedPreset.imgFile}`"
+              :src="`${baseUrl}presets/${zoomedPreset.imgFile}`"
               :alt="zoomedPreset.shortName"
               class="lightbox-img"
             />
@@ -228,6 +228,7 @@ interface Emits {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+const baseUrl = (import.meta as any).env?.BASE_URL || '/'
 
 // ── Anatomical keypoint definitions ──────────────────────────────────────────
 const KEYPOINT_DEFS = [
@@ -998,4 +999,49 @@ loadKeypointsForProfile()
 .keypoint-scroll::-webkit-scrollbar-track { background: transparent; }
 .profile-list::-webkit-scrollbar-thumb,
 .keypoint-scroll::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 3px; }
+
+/* ── Mobile (≤ 768px) ─────────────────────────────────────── */
+@media (max-width: 768px) {
+  .modal-overlay { padding: 0; }
+
+  .modal-content {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 100vh;
+    max-height: 100dvh;
+    border-radius: 0;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .modal-body { flex-direction: column; }
+
+  .col-left {
+    width: 100%;
+    min-width: 100%;
+    max-height: 40vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border-muted);
+  }
+
+  .col-right { flex: 1; min-height: 0; }
+
+  .preset-cards { flex-direction: column; }
+  .preset-card { flex: none; }
+
+  .modal-header { padding: 12px 16px; }
+  .modal-header h2 { font-size: 15px; }
+
+  .modal-footer {
+    padding: 12px 16px;
+    gap: 8px;
+  }
+  .modal-footer .btn { flex: 1; justify-content: center; min-height: 44px; }
+
+  .form-input { font-size: 16px; padding: 10px 12px; }
+  .btn-create { min-height: 44px; padding: 10px 16px; }
+
+  .keypoint-row { padding: 8px 12px; min-height: 44px; }
+  .profile-item { padding: 12px 8px; }
+}
 </style>

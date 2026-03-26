@@ -705,7 +705,6 @@ html, body {
   max-height: 100%;
   object-fit: contain;
   display: block;
-}
   border: 1px solid var(--border-muted);
 }
 
@@ -1155,6 +1154,273 @@ html, body {
 
 /* ── Responsive ─────────────────────────────────────────────────────────────── */
 
-@media (max-width: 800px) {
+/* ── Tablet (≤ 900px) ───────────────────────────────────────────────────── */
+@media (max-width: 900px) {
   :root { --left-panel-w: 240px; }
+}
+
+/* ── Mobile (≤ 768px) — left panel becomes a slide-over drawer ──────────── */
+@media (max-width: 768px) {
+  :root {
+    --left-panel-w: 280px;
+    --header-h: 52px;
+  }
+
+  /* Allow scroll on body for mobile — desktop uses overflow:hidden */
+  html, body { overflow: auto; }
+  #app-container { height: auto; min-height: 100vh; min-height: 100dvh; }
+
+  /* ── Header ─────────────────────────────────────────────── */
+  .app-header {
+    height: var(--header-h);
+    min-height: var(--header-h);
+    padding: 0 var(--sp-8);
+    position: sticky;
+    top: 0;
+    z-index: 200;
+  }
+
+  .brand-name { font-size: 14px; }
+
+  .btn-header {
+    padding: 6px 12px;
+    font-size: var(--fs-sm);
+    min-height: 36px;
+  }
+
+  /* ── Hamburger / drawer toggle ──────────────────────────── */
+  .mobile-menu-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface-raised);
+    color: var(--text-secondary);
+    font-size: 20px;
+    cursor: pointer;
+    -webkit-app-region: no-drag;
+    flex-shrink: 0;
+  }
+  .mobile-menu-btn:hover { background: var(--bg-panel-header); }
+
+  /* ── App Body ───────────────────────────────────────────── */
+  .app-body {
+    flex-direction: column;
+  }
+
+  /* ── Left Panel → Drawer ────────────────────────────────── */
+  .left-panel {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: var(--left-panel-w);
+    min-width: var(--left-panel-w);
+    max-width: 85vw;
+    z-index: 500;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: none;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .left-panel.drawer-open {
+    transform: translateX(0);
+    box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+  }
+
+  /* Drawer backdrop (created in JS) */
+  .drawer-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 499;
+  }
+  .drawer-backdrop.visible {
+    display: block;
+  }
+
+  /* Panel sections — more tap-friendly */
+  .panel-section { padding: 16px; }
+  .panel-section-title { font-size: var(--fs-sm); margin-bottom: var(--sp-12); }
+
+  .btn-run {
+    padding: 12px 16px;
+    font-size: var(--fs-base);
+    min-height: 44px;
+  }
+
+  .btn-xs {
+    padding: 6px 12px;
+    font-size: var(--fs-sm);
+    min-height: 36px;
+  }
+
+  .btn-sm {
+    padding: 8px 14px;
+    font-size: var(--fs-sm);
+    min-height: 36px;
+  }
+
+  .export-btns { gap: 8px; }
+
+  /* ── Workspace ──────────────────────────────────────────── */
+  .workspace { min-height: 0; }
+
+  .workspace-empty { padding: var(--sp-16); }
+  .getting-started { max-width: 100%; padding: var(--sp-16); }
+  .gs-title { font-size: var(--fs-base); }
+
+  /* ── Workspace Content — stacked layout ─────────────────── */
+  .workspace-content {
+    flex-direction: column;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* ── Viewer row: stack thumbnail strip horizontally ────── */
+  .viewer-row {
+    flex-direction: column !important;
+    flex: none !important;
+    height: auto !important;
+    min-height: 0;
+    border-bottom: 1px solid var(--border-default);
+  }
+
+  /* Thumbnail strip → horizontal scroll bar at top */
+  .thumb-strip {
+    width: 100%;
+    min-width: 100%;
+    height: 72px;
+    min-height: 72px;
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: none;
+    border-bottom: 1px solid var(--border-default);
+    padding: 4px 8px;
+    gap: 6px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .thumb-item {
+    width: 60px;
+    min-width: 60px;
+    max-height: 60px;
+    flex-shrink: 0;
+  }
+
+  /* Image viewer — constrained height on mobile */
+  .image-viewer {
+    min-height: 200px;
+    max-height: 50vh;
+  }
+
+  .viewer-bar {
+    min-height: 40px;
+    height: 40px;
+    padding: 0 var(--sp-8);
+  }
+
+  .canvas-wrap { padding: var(--sp-4); }
+
+  /* ── Row Resizer — hidden on mobile (touch-unfriendly) ── */
+  .row-resizer { display: none; }
+
+  /* ── Measurements Panel ─────────────────────────────────── */
+  .measurements-panel {
+    flex: none;
+    min-height: 200px;
+    max-height: 50vh;
+    overflow: hidden;
+  }
+
+  .measurements-bar {
+    min-height: 40px;
+    height: auto;
+    flex-wrap: wrap;
+    gap: var(--sp-4);
+    padding: var(--sp-8);
+  }
+
+  .measures-info-btn { margin-left: 0; margin-top: 4px; }
+
+  /* Data table: horizontal scroll with sticky specimen column */
+  .table-wrap {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .data-table { min-width: 600px; }
+
+  .th-specimen,
+  .td-specimen {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: inherit;
+  }
+  .th-specimen { background: var(--bg-panel-header); }
+  .td-specimen { background: var(--bg-surface); }
+  .data-table tbody tr:hover .td-specimen { background: var(--bg-canvas); }
+  .data-table tbody tr.row-selected .td-specimen { background: var(--accent-blue-bg); }
+
+  .data-table th { padding: 8px 10px; }
+  .data-table td { padding: 10px 10px; }
+
+  /* ── Status bar — compact on mobile ─────────────────────── */
+  .status-bar {
+    min-height: 36px;
+    padding: 0 var(--sp-8);
+    font-size: var(--fs-xs);
+  }
+
+  /* ── Footer ─────────────────────────────────────────────── */
+  .app-footer {
+    height: auto;
+    min-height: 30px;
+    padding: var(--sp-4) var(--sp-8);
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  /* ── Modals — near full screen on mobile ────────────────── */
+  .measures-lightbox-overlay { padding: 8px; }
+  .measures-lightbox-inner { max-width: 100vw; max-height: 95vh; }
+  .measures-lightbox-reference { flex-direction: column; gap: 4px; padding: 8px 12px; }
+
+  /* ── Tooltips — reposition for touch ────────────────────── */
+  .conf-tooltip { width: 200px; font-size: 11px; }
+
+  /* Column resize handle — hide on mobile */
+  .col-resize-handle { display: none; }
+}
+
+/* ── Small phones (≤ 480px) ─────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  :root { --left-panel-w: 260px; }
+
+  .app-header { padding: 0 var(--sp-4); gap: var(--sp-4); }
+  .header-actions { gap: 2px; }
+  .btn-header { padding: 5px 8px; font-size: var(--fs-xs); }
+
+  .panel-section { padding: 12px; }
+
+  .thumb-strip { height: 60px; min-height: 60px; }
+  .thumb-item { width: 48px; min-width: 48px; max-height: 48px; }
+
+  .image-viewer { max-height: 40vh; }
+
+  .summary-grid { grid-template-columns: 1fr 1fr; gap: 4px; }
+  .summary-item { padding: 4px 6px; }
+  .summary-label { font-size: 9px; }
+  .summary-value { font-size: var(--fs-xs); }
+}
+
+/* ── Hide hamburger on desktop ──────────────────────────────────────────── */
+@media (min-width: 769px) {
+  .mobile-menu-btn { display: none !important; }
+  .drawer-backdrop { display: none !important; }
 }
