@@ -109,6 +109,7 @@ export interface DialogOptions {
   multiple?: boolean
   defaultPath?: string
   filters?: { name: string; extensions: string[] }[]
+  onUploadProgress?: (uploaded: number, total: number) => void
 }
 
 export async function openDialog(
@@ -154,23 +155,34 @@ export async function openDialog(
       const files = input.files
       if (!files || files.length === 0) { resolve(null); return }
 
-      // Upload files to the backend and return server paths
-      const formData = new FormData()
-      for (let i = 0; i < files.length; i++) {
-        formData.append('files', files[i])
-      }
+      // Upload files one at a time to avoid single-request size limits.
+      // A batch of 40+ large images sent as one multipart request would exceed
+      // nginx/server limits and spike memory. Sequential uploads are safer.
       try {
         const base = await getBackendUrl()
-        const resp = await fetch(`${base}/upload`, { method: 'POST', body: formData })
-        if (!resp.ok) { resolve(null); return }
-        const json = await resp.json()
-        // json = { upload_dir: string, files: [{name, path, size}] }
+        let uploadDir: string | null = null
+        const allFiles: { name: string; path: string; size: number }[] = []
+
+        for (let i = 0; i < files.length; i++) {
+          opts.onUploadProgress?.(i, files.length)
+          const formData = new FormData()
+          formData.append('files', files[i])
+          // Reuse same session dir after first upload so all files land together
+          if (uploadDir) formData.append('session_dir', uploadDir)
+          const resp = await fetch(`${base}/upload`, { method: 'POST', body: formData })
+          if (!resp.ok) { resolve(null); return }
+          const json = await resp.json()
+          if (!uploadDir) uploadDir = json.upload_dir as string
+          allFiles.push(...json.files)
+        }
+
+        if (!uploadDir) { resolve(null); return }
         if (opts.directory) {
-          resolve(json.upload_dir as string)
+          resolve(uploadDir)
         } else if (opts.multiple) {
-          resolve(json.files.map((f: any) => f.path) as string[])
+          resolve(allFiles.map((f) => f.path))
         } else {
-          resolve(json.files[0]?.path ?? null)
+          resolve(allFiles[0]?.path ?? null)
         }
       } catch (err) {
         console.error('[platform] Upload failed:', err)

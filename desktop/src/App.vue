@@ -187,8 +187,13 @@
           <div class="spinner"></div>
           <div class="analyzing-status">
             <span class="analyzing-label">Uploading images…</span>
+            <template v-if="uploadTotal > 0">
+              <div class="progress-bar-workspace">
+                <div class="progress-fill-workspace" :style="{ width: (uploadCount / uploadTotal * 100) + '%' }"></div>
+              </div>
+              <span class="analyzing-count">{{ uploadCount }} / {{ uploadTotal }} files</span>
+            </template>
             <span class="analyzing-file">{{ uploadingProfileName ? 'Profile: ' + uploadingProfileName : 'Transferring files to server' }}</span>
-            <span class="analyzing-count" style="font-size: var(--fs-xs); margin-top: 4px; opacity: 0.7;">This may take a moment depending on file size</span>
           </div>
         </div>
 
@@ -545,6 +550,8 @@ const mobileDrawerOpen = ref(false)
 const baseUrl = (import.meta as any).env?.BASE_URL || '/'
 const isUploading = ref(false)
 const uploadingProfileName = ref('')
+const uploadCount = ref(0)
+const uploadTotal = ref(0)
 
 function openPhotafishArticle() {
   openExternal('https://www.mapress.com/zt/article/view/zootaxa.4554.1.4')
@@ -850,10 +857,16 @@ async function selectFolderForProfile(profileId: string) {
   const profileIdx = profiles.value.findIndex(p => p.id === profileId)
   try {
     isUploading.value = true
+    uploadCount.value = 0
+    uploadTotal.value = 0
     uploadingProfileName.value = profileIdx !== -1 ? profiles.value[profileIdx].name : ''
     const selected = await openDialog({
       directory: true,
       multiple: false,
+      onUploadProgress: (uploaded, total) => {
+        uploadCount.value = uploaded + 1
+        uploadTotal.value = total
+      },
     })
     if (selected && typeof selected === 'string') {
       if (profileIdx !== -1) {
@@ -871,6 +884,8 @@ async function selectFolderForProfile(profileId: string) {
   } finally {
     isUploading.value = false
     uploadingProfileName.value = ''
+    uploadCount.value = 0
+    uploadTotal.value = 0
   }
 }
 
