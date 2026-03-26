@@ -49,6 +49,22 @@ export async function analyzeImage(
   return response.data
 }
 
+export async function listImages(
+  folderPath: string,
+  limit?: number,
+): Promise<{ count: number; images: string[] }> {
+  const url = await getBackendUrl()
+  const response = await platformFetch<{ count: number; images: string[] }>(`${url}/list-images`, {
+    method: 'POST',
+    body: {
+      folder_path: folderPath,
+      limit: limit || null,
+    },
+  })
+  if (!response.ok) throw new Error(`List images failed: ${response.status}`)
+  return response.data
+}
+
 export async function analyzeFolder(
   folderPath: string,
   returnOverlay: boolean = true,

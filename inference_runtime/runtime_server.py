@@ -495,6 +495,18 @@ def infer_one(req: InferImageReq) -> Dict[str, Any]:
     return resp
 
 
+@app.post("/list-images")
+def list_images(req: InferFolderReq) -> Dict[str, Any]:
+    """Return image file paths in a folder without running inference."""
+    folder = os.path.abspath(req.folder_path)
+    if not os.path.exists(folder):
+        raise HTTPException(status_code=404, detail=f"Path not found: {folder}")
+    images = sorted(_iter_images(folder))
+    if req.limit is not None:
+        images = images[: req.limit]
+    return {"count": len(images), "images": images}
+
+
 @app.post("/infer/folder")
 def infer_folder(req: InferFolderReq) -> Dict[str, Any]:
     folder = os.path.abspath(req.folder_path)

@@ -179,9 +179,33 @@
           <span>Connecting to backend…</span>
         </div>
 
-        <!-- Getting Started (empty state) -->
+        <!-- Analyzing (visible in workspace so mobile users see progress) -->
+        <div v-if="isAnalyzing && !predictions.length" class="workspace-loading">
+          <div class="spinner"></div>
+          <div class="analyzing-status">
+            <span class="analyzing-label">Analyzing…</span>
+            <div v-if="totalCount > 0" class="progress-bar-workspace">
+              <div class="progress-fill-workspace" :style="{ width: (processedCount / totalCount * 100) + '%' }"></div>
+            </div>
+            <span v-if="totalCount > 0" class="analyzing-count">{{ processedCount }} / {{ totalCount }} images</span>
+            <span v-if="currentProcessingFile" class="analyzing-file">{{ currentProcessingFile.split('/').pop() }}</span>
+          </div>
+        </div>
+
+        <!-- Error state (show error instead of "Getting Started") -->
+        <div v-if="state === 'error' && !predictions.length && !isAnalyzing" class="workspace-empty">
+          <div class="getting-started">
+            <div class="gs-title" style="color: var(--danger, #e74c3c);">Analysis Failed</div>
+            <p style="margin: 12px 0; color: var(--text-secondary, #666);">{{ errorMessage }}</p>
+            <button class="btn-run" @click="startAnalysis" :disabled="!hasActiveFoldersSelected" style="margin-top: 12px;">
+              Retry Analysis
+            </button>
+          </div>
+        </div>
+
+        <!-- Getting Started (empty state — NOT shown during error) -->
         <div
-          v-if="!predictions.length && !isAnalyzing && state !== 'loading'"
+          v-if="!predictions.length && !isAnalyzing && state !== 'loading' && state !== 'error'"
           class="workspace-empty"
         >
           <div class="getting-started">
@@ -464,6 +488,8 @@ import {
 import type { PredictionResult, ModelInfo, AnalysisState, Profile } from './types'
 import { 
   analyzeFolder, 
+  analyzeImage,
+  listImages,
   getModelInfo, 
   exportCSV, 
   exportJSON, 
@@ -870,20 +896,47 @@ async function startAnalysis() {
     let totalProcessed = 0
 
     for (const profile of activeFolders) {
-      const result = await analyzeFolder(
-        profile.folder_path,
-        true,
-        undefined,
-        profile.id,
-        profile.name
-      )
-      const withProfile = result.predictions.map(pred => ({
-        ...pred,
-        profile_id: profile.id,
-      }))
-      
-      allPredictions.push(...withProfile)
-      totalProcessed += result.count
+      if (isTauri) {
+        // Desktop: single batch request (no timeout issues)
+        const result = await analyzeFolder(
+          profile.folder_path,
+          true,
+          undefined,
+          profile.id,
+          profile.name
+        )
+        const withProfile = result.predictions.map(pred => ({
+          ...pred,
+          profile_id: profile.id,
+        }))
+        allPredictions.push(...withProfile)
+        totalProcessed += result.count
+      } else {
+        // Web mode: process images one at a time to avoid mobile timeout.
+        // First list all images in the folder, then infer each individually.
+        const listing = await listImages(profile.folder_path)
+        totalCount.value += listing.count
+        currentProcessingFile.value = `Found ${listing.count} images…`
+
+        for (const imgPath of listing.images) {
+          currentProcessingFile.value = imgPath.split('/').pop() || imgPath
+          try {
+            const pred = await analyzeImage(imgPath, true)
+            allPredictions.push({
+              ...pred,
+              profile_id: profile.id,
+              profile_name: profile.name,
+            } as PredictionResult & { profile_id: string })
+            totalProcessed++
+            processedCount.value = totalProcessed
+            // Update predictions progressively so user sees results appear
+            predictions.value = [...allPredictions] as PredictionResult[]
+          } catch (imgErr) {
+            console.warn(`Skipped ${imgPath}:`, imgErr)
+            // Continue with next image even if one fails
+          }
+        }
+      }
     }
 
     predictions.value = allPredictions as PredictionResult[]

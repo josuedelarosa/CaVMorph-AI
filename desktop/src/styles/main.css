@@ -503,6 +503,7 @@ html, body {
 .workspace-loading {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: var(--sp-12);
@@ -519,6 +520,38 @@ html, body {
   animation: spin 0.7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Workspace analyzing progress */
+.analyzing-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.analyzing-label { font-weight: 600; font-size: var(--fs-base); }
+.analyzing-count { font-size: var(--fs-sm); color: var(--text-secondary); }
+.analyzing-file {
+  font-size: var(--fs-xs);
+  color: var(--text-tertiary);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.progress-bar-workspace {
+  width: 200px;
+  height: 6px;
+  background: var(--surface-secondary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-fill-workspace {
+  height: 100%;
+  background: var(--accent-blue);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
 
 /* Empty / Getting Started */
 .workspace-empty {

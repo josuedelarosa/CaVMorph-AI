@@ -1014,34 +1014,93 @@ loadKeypointsForProfile()
     height: 100dvh;
   }
 
-  .modal-body { flex-direction: column; }
+  /* Stack columns vertically, entire body scrolls as one */
+  .modal-body {
+    flex-direction: column;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 
+  /* Left column: full width, natural height — no scroll trap */
   .col-left {
     width: 100%;
     min-width: 100%;
-    max-height: 40vh;
+    max-height: none;
+    overflow: visible;
     border-right: none;
     border-bottom: 1px solid var(--border-muted);
+    flex-shrink: 0;
   }
 
-  .col-right { flex: 1; min-height: 0; }
+  /* Profile list: show all items inline, no scroll */
+  .col-left .col-section:first-child {
+    overflow: visible;
+  }
+  .profile-list {
+    overflow: visible;
+    max-height: none;
+  }
 
-  .preset-cards { flex-direction: column; }
+  /* Right column: natural height, no internal scroll */
+  .col-right {
+    flex: none;
+    overflow: visible;
+    min-height: auto;
+  }
+
+  /* Keypoint editor: no fixed flex, show scroll area */
+  .keypoint-editor {
+    overflow: visible;
+    flex: none;
+  }
+  .keypoint-scroll {
+    max-height: 240px;
+    overflow-y: auto;
+  }
+
+  /* Preset cards: stack vertically, smaller images */
+  .preset-reference { padding: 14px 12px 10px; }
+  .preset-cards { flex-direction: column; gap: 8px; }
   .preset-card { flex: none; }
+  .preset-img-wrap { aspect-ratio: 16 / 5; }
 
-  .modal-header { padding: 12px 16px; }
-  .modal-header h2 { font-size: 15px; }
+  /* Header */
+  .modal-header { padding: 14px 16px; }
+  .modal-header h2 { font-size: 16px; }
+  .close-btn { width: 36px; height: 36px; font-size: 22px; }
 
+  /* Footer: sticky at bottom */
   .modal-footer {
     padding: 12px 16px;
     gap: 8px;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
   }
-  .modal-footer .btn { flex: 1; justify-content: center; min-height: 44px; }
+  .modal-footer .btn {
+    flex: 1;
+    justify-content: center;
+    min-height: 44px;
+    font-size: 14px;
+  }
 
+  /* Touch-friendly inputs and tap targets */
   .form-input { font-size: 16px; padding: 10px 12px; }
-  .btn-create { min-height: 44px; padding: 10px 16px; }
-
-  .keypoint-row { padding: 8px 12px; min-height: 44px; }
+  .btn-create { min-height: 44px; padding: 10px 16px; width: 100%; }
+  .keypoint-row { padding: 10px 12px; min-height: 44px; }
   .profile-item { padding: 12px 8px; }
+  .btn-icon-danger { width: 32px; height: 32px; font-size: 18px; }
+
+  /* Privacy section */
+  .privacy-toggle-row { min-height: 44px; }
+  .privacy-note { font-size: 12px; }
+
+  /* Section titles */
+  .col-section { padding: 14px 16px; }
+  .col-section-title { font-size: 12px; margin-bottom: 10px; }
+
+  /* Lightbox */
+  .lightbox-inner { max-width: 100vw; border-radius: 0; }
+  .lightbox-img { max-height: 60vh; }
 }
 </style>

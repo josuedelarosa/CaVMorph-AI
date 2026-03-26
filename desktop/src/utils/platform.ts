@@ -123,9 +123,22 @@ export async function openDialog(
   return new Promise((resolve) => {
     const input = document.createElement('input')
     input.type = 'file'
-    if (opts.directory) {
+
+    // iOS Safari does not support webkitdirectory.
+    // Detect it: if the browser doesn't fire `change` after setting the
+    // attribute, we'd get stuck. Instead, on browsers that lack support
+    // (all iOS browsers), fall back to multi-file select with image filter.
+    const supportsDirectory =
+      'webkitdirectory' in HTMLInputElement.prototype &&
+      !/iPhone|iPad|iPod/i.test(navigator.userAgent)
+
+    if (opts.directory && supportsDirectory) {
       input.setAttribute('webkitdirectory', '')
       input.setAttribute('directory', '')
+    } else if (opts.directory) {
+      // Fallback: let user pick multiple image files (iOS-friendly)
+      input.multiple = true
+      input.accept = 'image/*'
     }
     if (opts.multiple) input.multiple = true
     if (opts.filters?.length) {
