@@ -473,6 +473,16 @@ def infer_one(req: InferImageReq) -> Dict[str, Any]:
             bgr_draw = bgr
             del bgr
             resp_draw = resp
+
+        # Plain thumbnail (no keypoints) for sidebar strip.
+        # Fixed 120 px wide, always INTER_AREA, JPEG q60 — consistent regardless of source size.
+        _h_bd, _w_bd = bgr_draw.shape[:2]
+        _pth = max(1, int(120 * _h_bd / _w_bd))
+        _plain_thumb = cv2.resize(bgr_draw, (120, _pth), interpolation=cv2.INTER_AREA)
+        _, _plain_buf = cv2.imencode(".jpg", _plain_thumb, [cv2.IMWRITE_JPEG_QUALITY, 60])
+        resp["plain_thumbnail_base64"] = base64.b64encode(_plain_buf).decode("utf-8")
+        del _plain_thumb, _plain_buf
+
         overlay = _draw_overlay(bgr_draw, resp_draw)
         del bgr_draw
         if resp_draw is not resp:
@@ -591,6 +601,16 @@ def infer_folder(req: InferFolderReq) -> Dict[str, Any]:
                 bgr_draw = bgr
                 del bgr
                 resp_draw = resp
+
+            # Plain thumbnail (no keypoints) for sidebar strip.
+            # Fixed 120 px wide, always INTER_AREA, JPEG q60 — consistent regardless of source size.
+            _h_bd, _w_bd = bgr_draw.shape[:2]
+            _pth = max(1, int(120 * _h_bd / _w_bd))
+            _plain_thumb = cv2.resize(bgr_draw, (120, _pth), interpolation=cv2.INTER_AREA)
+            _, _plain_buf = cv2.imencode(".jpg", _plain_thumb, [cv2.IMWRITE_JPEG_QUALITY, 60])
+            resp["plain_thumbnail_base64"] = base64.b64encode(_plain_buf).decode("utf-8")
+            del _plain_thumb, _plain_buf
+
             overlay = _draw_overlay(bgr_draw, resp_draw)
             del bgr_draw
             if resp_draw is not resp:
