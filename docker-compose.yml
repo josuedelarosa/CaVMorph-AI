@@ -20,8 +20,4 @@ services:
       # Copy model.onnx and model_metadata.json into ./models/cavfish_v1/ on the server before
       # running `docker compose up`.
       - ./models/cavfish_v1:/app/models/cavfish_v1:ro
-      # Persist uploads across container restarts
-      - phenoai-uploads:/app/uploads
-
-volumes:
-  phenoai-uploads:
+      # Uploads are ephemeral — deleted after each inference call; no volume needed.

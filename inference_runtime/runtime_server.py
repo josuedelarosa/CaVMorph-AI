@@ -492,6 +492,19 @@ def infer_one(req: InferImageReq) -> Dict[str, Any]:
         _scale_resp_to_original(resp, infer_scale)
 
     resp["file_size"] = os.path.getsize(img_path)
+
+    # Delete the uploaded source file immediately after inference — user data is
+    # never retained on the server beyond the lifetime of a single API call.
+    # If this was the only file in its session directory, remove the directory too.
+    try:
+        src = Path(img_path)
+        src.unlink(missing_ok=True)
+        parent = src.parent
+        if parent != _UPLOAD_ROOT and not any(parent.iterdir()):
+            parent.rmdir()
+    except Exception:
+        pass  # best-effort; never fail the response due to cleanup errors
+
     return resp
 
 
