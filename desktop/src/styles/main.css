@@ -521,6 +521,18 @@ html, body {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Inline spinner for Browse button during upload */
+.upload-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
 /* Workspace analyzing progress */
 .analyzing-status {
   display: flex;

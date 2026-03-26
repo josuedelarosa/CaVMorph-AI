@@ -90,8 +90,11 @@
               <button
                 class="btn-xs btn-outline"
                 @click="selectFolderForProfile(profile.id)"
-                :disabled="isAnalyzing"
-              >Browse</button>
+                :disabled="isAnalyzing || isUploading"
+              >
+                <span v-if="isUploading && uploadingProfileName === profile.name" class="upload-spinner"></span>
+                <span v-else>Browse</span>
+              </button>
               <button
                 v-if="profile.folder_path"
                 class="btn-xs btn-ghost"
@@ -177,6 +180,16 @@
         <div v-if="state === 'loading' && !predictions.length" class="workspace-loading">
           <div class="spinner"></div>
           <span>Connecting to backend…</span>
+        </div>
+
+        <!-- Uploading images (web mode — file transfer can take time) -->
+        <div v-if="isUploading && !predictions.length && !isAnalyzing" class="workspace-loading">
+          <div class="spinner"></div>
+          <div class="analyzing-status">
+            <span class="analyzing-label">Uploading images…</span>
+            <span class="analyzing-file">{{ uploadingProfileName ? 'Profile: ' + uploadingProfileName : 'Transferring files to server' }}</span>
+            <span class="analyzing-count" style="font-size: var(--fs-xs); margin-top: 4px; opacity: 0.7;">This may take a moment depending on file size</span>
+          </div>
         </div>
 
         <!-- Analyzing (visible in workspace so mobile users see progress) -->
@@ -530,6 +543,8 @@ const showSettings = ref(false)
 const showMeasuresDiagram = ref(false)
 const mobileDrawerOpen = ref(false)
 const baseUrl = (import.meta as any).env?.BASE_URL || '/'
+const isUploading = ref(false)
+const uploadingProfileName = ref('')
 
 function openPhotafishArticle() {
   openExternal('https://www.mapress.com/zt/article/view/zootaxa.4554.1.4')
@@ -832,13 +847,15 @@ function deselectImage(idx: number) {
 
 
 async function selectFolderForProfile(profileId: string) {
+  const profileIdx = profiles.value.findIndex(p => p.id === profileId)
   try {
+    isUploading.value = true
+    uploadingProfileName.value = profileIdx !== -1 ? profiles.value[profileIdx].name : ''
     const selected = await openDialog({
       directory: true,
       multiple: false,
     })
     if (selected && typeof selected === 'string') {
-      const profileIdx = profiles.value.findIndex(p => p.id === profileId)
       if (profileIdx !== -1) {
         profiles.value[profileIdx].folder_path = selected
         await saveConfig({
@@ -851,6 +868,9 @@ async function selectFolderForProfile(profileId: string) {
     }
   } catch (err) {
     errorMessage.value = `Failed to select folder: ${err}`
+  } finally {
+    isUploading.value = false
+    uploadingProfileName.value = ''
   }
 }
 
