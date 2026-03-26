@@ -1166,18 +1166,7 @@ function drawPreview() {
 
   const img = new Image()
   img.onload = () => drawLoadedImage(img)
-  img.onerror = () => {
-    // Original source file may have been deleted after inference (ephemeral uploads).
-    // Use the overlay preview base64 as the canvas background if available.
-    if (pred.overlay_preview_base64) {
-      const fallback = new Image()
-      fallback.onload = () => drawLoadedImage(fallback)
-      fallback.onerror = () => drawFallbackGray()
-      fallback.src = 'data:image/jpeg;base64,' + pred.overlay_preview_base64
-    } else {
-      drawFallbackGray()
-    }
-  }
+  img.onerror = () => drawFallbackGray()
   img.crossOrigin = 'anonymous'
   resolveImageUrl(imagePath).then(url => { img.src = url })
 }

@@ -82,6 +82,34 @@ app = FastAPI(title="PhenoAI Inference Runtime")
 @app.on_event("startup")
 def startup_event() -> None:
     _init_engine()
+    _start_upload_cleanup()
+
+
+_UPLOAD_TTL_SECONDS = 30 * 60  # delete session dirs older than 30 minutes
+
+
+def _start_upload_cleanup() -> None:
+    """Launch a background thread that periodically removes old upload dirs."""
+    import threading
+
+    def _cleanup_loop() -> None:
+        import time
+        while True:
+            time.sleep(5 * 60)  # run every 5 minutes
+            try:
+                now = time.time()
+                for session_dir in _UPLOAD_ROOT.iterdir():
+                    if not session_dir.is_dir():
+                        continue
+                    age = now - session_dir.stat().st_mtime
+                    if age > _UPLOAD_TTL_SECONDS:
+                        import shutil
+                        shutil.rmtree(session_dir, ignore_errors=True)
+            except Exception:
+                pass  # never crash the cleanup thread
+
+    t = threading.Thread(target=_cleanup_loop, daemon=True)
+    t.start()
 
 app.add_middleware(
     CORSMiddleware,
@@ -492,19 +520,6 @@ def infer_one(req: InferImageReq) -> Dict[str, Any]:
         _scale_resp_to_original(resp, infer_scale)
 
     resp["file_size"] = os.path.getsize(img_path)
-
-    # Delete the uploaded source file immediately after inference — user data is
-    # never retained on the server beyond the lifetime of a single API call.
-    # If this was the only file in its session directory, remove the directory too.
-    try:
-        src = Path(img_path)
-        src.unlink(missing_ok=True)
-        parent = src.parent
-        if parent != _UPLOAD_ROOT and not any(parent.iterdir()):
-            parent.rmdir()
-    except Exception:
-        pass  # best-effort; never fail the response due to cleanup errors
-
     return resp
 
 
