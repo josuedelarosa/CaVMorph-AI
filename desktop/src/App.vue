@@ -263,13 +263,7 @@
                 >{{ focusMode ? '▲' : '▼' }}</button>
               </div>
               <div class="canvas-wrap" v-if="selectedPrediction">
-                <img
-                  v-if="selectedPrediction.overlay_preview_base64"
-                  :key="selectedPredictionIdx"
-                  :src="'data:image/jpeg;base64,' + selectedPrediction.overlay_preview_base64"
-                  class="preview-img"
-                />
-                <canvas v-else ref="previewCanvas" class="preview-canvas"></canvas>
+                <canvas ref="previewCanvas" class="preview-canvas"></canvas>
               </div>
               <div class="canvas-empty" v-else>
                 Select a specimen to preview
@@ -1122,15 +1116,13 @@ async function loadPreviewForIdx(idx: number) {
     }
     // Cache in the prediction object so re-selecting doesn't re-read the file
     predictions.value[idx] = { ...predictions.value[idx], overlay_preview_base64: btoa(binary) }
-    // Vue reactive update triggers the <img> element automatically
+    drawPreview()
   } catch {
     drawPreview() // canvas fallback on read error
   }
 }
 
 function drawPreview() {
-  // overlay_preview_base64 → the <img> element handles it reactively, no canvas needed.
-  if (selectedPrediction.value?.overlay_preview_base64) return
   if (!previewCanvas.value || !selectedPrediction.value) return
 
   const canvas = previewCanvas.value
