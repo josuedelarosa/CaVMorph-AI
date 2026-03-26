@@ -22,6 +22,7 @@ export interface PredictionResult {
   overlay_path?: string
   overlay_preview_base64?: string
   overlay_thumbnail_base64?: string
+  plain_thumbnail_base64?: string
   file_size?: number
 }
 

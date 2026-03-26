@@ -255,8 +255,8 @@
                 :title="getFilename(pred.image_path)"
               >
                 <img
-                  v-if="pred.overlay_thumbnail_base64"
-                  :src="'data:image/jpeg;base64,' + pred.overlay_thumbnail_base64"
+                  v-if="pred.plain_thumbnail_base64 || pred.overlay_thumbnail_base64"
+                  :src="'data:image/jpeg;base64,' + (pred.plain_thumbnail_base64 || pred.overlay_thumbnail_base64)"
                   class="thumb-img"
                   @error="(e) => ((e.target as HTMLImageElement).style.display = 'none')"
                 />

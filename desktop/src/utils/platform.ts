@@ -276,8 +276,8 @@ export async function resolveImageUrl(imagePath: string, maxwidth?: number): Pro
     return convertFileSrc(imagePath)
   }
   const base = await getBackendUrl()
-  const w = maxwidth ?? 1600
-  return `${base}/files?path=${encodeURIComponent(imagePath)}&maxwidth=${w}`
+  const url = `${base}/files?path=${encodeURIComponent(imagePath)}`
+  return maxwidth ? `${url}&maxwidth=${maxwidth}` : url
 }
 
 // ── Tauri invoke (desktop only) ─────────────────────────────────────
