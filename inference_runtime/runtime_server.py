@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, HTTPException, Query, UploadFile, File
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -688,11 +688,26 @@ def _is_safe_path(requested: Path) -> bool:
 
 
 @app.post("/upload")
-async def upload_files(files: List[UploadFile] = File(...)):
-    """Accept uploaded images, store in a session subdirectory, return paths."""
-    session_id = uuid.uuid4().hex[:12]
-    session_dir = _UPLOAD_ROOT / session_id
-    session_dir.mkdir(parents=True, exist_ok=True)
+async def upload_files(
+    files: List[UploadFile] = File(...),
+    session_dir: Optional[str] = Form(None),
+):
+    """Accept uploaded images one at a time, store in a session subdirectory.
+
+    Pass session_dir from the first response back on subsequent calls to
+    accumulate all files in the same directory (used by the web client to
+    upload a large batch without hitting per-request size limits).
+    """
+    if session_dir:
+        # Reuse an existing session directory — validate it is under _UPLOAD_ROOT
+        sd = Path(session_dir).resolve()
+        if not _is_safe_path(sd):
+            raise HTTPException(status_code=403, detail="Invalid session_dir")
+        sd.mkdir(parents=True, exist_ok=True)
+    else:
+        session_id = uuid.uuid4().hex[:12]
+        sd = _UPLOAD_ROOT / session_id
+        sd.mkdir(parents=True, exist_ok=True)
 
     result_files = []
     for f in files:
@@ -700,7 +715,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
         safe_name = Path(f.filename or "unnamed").name
         if not safe_name:
             continue
-        dest = session_dir / safe_name
+        dest = sd / safe_name
         with open(dest, "wb") as out:
             content = await f.read()
             out.write(content)
@@ -709,7 +724,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
             "path": str(dest),
             "size": dest.stat().st_size,
         })
-    return {"upload_dir": str(session_dir), "files": result_files}
+    return {"upload_dir": str(sd), "files": result_files}
 
 
 @app.get("/files")
