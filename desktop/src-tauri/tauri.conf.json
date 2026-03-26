@@ -55,7 +55,7 @@
         "icons/icon.ico",
         "icons/icon.icns"
       ],
-      "targets": "all",
+      "targets": ["nsis"],
       "externalBin": [],
       "resources": [
         "../setup_onnx_runtime.py",
