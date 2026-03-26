@@ -16,7 +16,11 @@ services:
       # Set to "cpu" or "cuda" depending on the host
       - FISH_DEVICE=${FISH_DEVICE:-cpu}
     volumes:
-      # Persist uploads across container restarts (optional)
+      # Model files (bind-mount from host — not baked into image because *.onnx is gitignored).
+      # Copy model.onnx and model_metadata.json into ./models/cavfish_v1/ on the server before
+      # running `docker compose up`.
+      - ./models/cavfish_v1:/app/models/cavfish_v1:ro
+      # Persist uploads across container restarts
       - phenoai-uploads:/app/uploads
 
 volumes:

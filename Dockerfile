@@ -31,8 +31,9 @@ RUN pip install --no-cache-dir -r requirements.txt python-multipart
 # Copy inference runtime
 COPY inference_runtime/ /app/inference_runtime/
 
-# Copy model files
-COPY models/cavfish_v1/ /app/models/cavfish_v1/
+# Model files are bind-mounted at runtime via docker-compose (not baked into image).
+# Create the directory so the container starts even before the mount is attached.
+RUN mkdir -p /app/models/cavfish_v1
 
 # Copy built frontend from stage 1
 COPY --from=frontend /app/desktop/dist-web /app/static

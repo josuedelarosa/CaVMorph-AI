@@ -51,15 +51,37 @@ logger.info("Model dir: %s", MODEL_DIR)
 logger.info("Device: %s", DEVICE)
 
 # --------------------------------------------------
-# Engine initialization
+# Engine initialization (deferred to startup event)
 # --------------------------------------------------
-engine = create_engine(str(MODEL_DIR), device=DEVICE, force_legacy=FORCE_LEGACY)
-meta = engine.get_metadata_dict()
+engine = None  # type: ignore[assignment]
+meta: Dict[str, Any] = {}
+
+
+def _init_engine() -> None:
+    """Initialize the ONNX engine; called once at application startup."""
+    global engine, meta
+    try:
+        engine = create_engine(str(MODEL_DIR), device=DEVICE, force_legacy=FORCE_LEGACY)
+        meta = engine.get_metadata_dict()
+        logger.info("Engine ready (model_dir=%s device=%s)", MODEL_DIR, DEVICE)
+    except Exception as exc:
+        logger.error(
+            "FAILED to initialize inference engine — check that model files exist at %s. Error: %s",
+            MODEL_DIR,
+            exc,
+        )
+        raise SystemExit(1) from exc
+
 
 # --------------------------------------------------
 # FastAPI app
 # --------------------------------------------------
 app = FastAPI(title="PhenoAI Inference Runtime")
+
+
+@app.on_event("startup")
+def startup_event() -> None:
+    _init_engine()
 
 app.add_middleware(
     CORSMiddleware,
