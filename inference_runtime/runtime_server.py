@@ -24,7 +24,7 @@ import cv2
 import numpy as np
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -728,7 +728,10 @@ async def upload_files(
 
 
 @app.get("/files")
-def serve_file(path: str = Query(..., description="Absolute file path to serve")):
+def serve_file(
+    path: str = Query(..., description="Absolute file path to serve"),
+    maxwidth: Optional[int] = Query(None, ge=1, le=8192, description="Resize image to fit this max width (px)"),
+):
     """Serve a file from allowed directories (uploads or overlay tmp).
 
     Security: validates the resolved path is under an allowed root to
@@ -744,6 +747,7 @@ def serve_file(path: str = Query(..., description="Absolute file path to serve")
 
     # Determine MIME type
     ext = p.suffix.lower()
+    image_exts = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
     media_types = {
         ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
         ".png": "image/png", ".bmp": "image/bmp",
@@ -751,6 +755,18 @@ def serve_file(path: str = Query(..., description="Absolute file path to serve")
         ".webp": "image/webp",
     }
     media_type = media_types.get(ext, "application/octet-stream")
+
+    # If a max width was requested and this is an image, resize before serving
+    if maxwidth and ext in image_exts:
+        bgr = cv2.imread(str(p))
+        if bgr is not None:
+            h, w = bgr.shape[:2]
+            if w > maxwidth:
+                new_h = max(1, int(maxwidth * h / w))
+                bgr = cv2.resize(bgr, (maxwidth, new_h), interpolation=cv2.INTER_AREA)
+            _, buf = cv2.imencode(".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, 82])
+            return Response(content=buf.tobytes(), media_type="image/jpeg")
+
     return FileResponse(str(p), media_type=media_type)
 
 
