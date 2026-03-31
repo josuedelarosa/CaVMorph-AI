@@ -1199,11 +1199,20 @@ function drawPreview() {
   const imagePath = pred.image_path
   if (!imagePath) { drawFallbackGray(); return }
 
-  const img = new Image()
-  img.onload = () => drawLoadedImage(img)
-  img.onerror = () => drawFallbackGray()
-  img.crossOrigin = 'anonymous'
-  resolveImageUrl(imagePath).then(url => { img.src = url })
+  // Use readBinaryFile (Tauri FS bridge) + blob URL so the image load is not
+  // subject to the webview CSP which blocks http://127.0.0.1:* in img-src.
+  // blob: URLs are always allowed by the CSP. Falls back to resolveImageUrl
+  // in web mode where readBinaryFile fetches via the backend anyway.
+  readBinaryFile(imagePath)
+    .then(bytes => {
+      const blob = new Blob([bytes])
+      const blobUrl = URL.createObjectURL(blob)
+      const img = new Image()
+      img.onload = () => { drawLoadedImage(img); URL.revokeObjectURL(blobUrl) }
+      img.onerror = () => { drawFallbackGray(); URL.revokeObjectURL(blobUrl) }
+      img.src = blobUrl
+    })
+    .catch(() => drawFallbackGray())
 }
 
 function drawKeypointsOnCanvas(

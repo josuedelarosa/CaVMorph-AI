@@ -53,14 +53,17 @@
       "identifier": "com.cavfish.morphometrics",
       "icon": [
         "icons/icon.ico",
-        "icons/icon.icns"
+        "icons/icon.icns",
+        "icons/icon.png"
       ],
-      "targets": ["nsis"],
+      "targets": ["deb"],
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0", "libayatana-appindicator3-1", "librsvg2-2"]
+      },
       "externalBin": [],
       "resources": [
         "../setup_onnx_runtime.py",
         "../runtime/python",
-        "../../inference_runtime/**",
         "../../inference_runtime/*",
         "../../models/cavfish_v1/model.onnx",
         "../../models/cavfish_v1/model_metadata.json",

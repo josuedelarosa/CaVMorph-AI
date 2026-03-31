@@ -271,10 +271,12 @@ export async function openExternal(url: string): Promise<void> {
 // Converts a server-side image path to a URL the <img> tag can load.
 
 export async function resolveImageUrl(imagePath: string, maxwidth?: number): Promise<string> {
-  if (isTauri) {
+  if (isTauri && !navigator.platform.toLowerCase().startsWith('linux')) {
+    // macOS/Windows: convertFileSrc works well with asset:// protocol
     const { convertFileSrc } = await import('@tauri-apps/api/tauri')
     return convertFileSrc(imagePath)
   }
+  // Linux (webkit2gtk asset:// unreliable) + web mode: use backend /files endpoint
   const base = await getBackendUrl()
   const url = `${base}/files?path=${encodeURIComponent(imagePath)}`
   return maxwidth ? `${url}&maxwidth=${maxwidth}` : url

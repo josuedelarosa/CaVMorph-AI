@@ -50,6 +50,10 @@ FORCE_LEGACY = os.environ.get("PHENOAI_USE_LEGACY", "").strip() == "1"
 logger.info("Model dir: %s", MODEL_DIR)
 logger.info("Device: %s", DEVICE)
 
+# Writable temp dir for overlay images — MODEL_DIR may be read-only (installed .deb)
+_TMP_DIR: Path = Path(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))) / "pheno-ai" / "tmp"
+_TMP_DIR.mkdir(parents=True, exist_ok=True)
+
 # --------------------------------------------------
 # Engine initialization (deferred to startup event)
 # --------------------------------------------------
@@ -491,8 +495,7 @@ def infer_one(req: InferImageReq) -> Dict[str, Any]:
         # Scale keypoints to original-image coordinates now that drawing is done
         _scale_resp_to_original(resp, infer_scale)
 
-        tmp_dir = (MODEL_DIR / "tmp").resolve()
-        tmp_dir.mkdir(parents=True, exist_ok=True)
+        tmp_dir = _TMP_DIR
         stem = Path(img_path).stem
 
         # Save overlay to disk
@@ -551,10 +554,7 @@ def infer_folder(req: InferFolderReq) -> Dict[str, Any]:
     if not os.path.exists(folder):
         raise HTTPException(status_code=404, detail=f"Path not found: {folder}")
 
-    tmp_dir = None
-    if req.return_overlay_png:
-        tmp_dir = (MODEL_DIR / "tmp").resolve()
-        tmp_dir.mkdir(parents=True, exist_ok=True)
+    tmp_dir = _TMP_DIR if req.return_overlay_png else None
 
     import gc
     preds = []
@@ -697,7 +697,8 @@ _UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 # Allowed base directories for file serving (security: prevent path traversal)
 _ALLOWED_ROOTS: List[Path] = [
     _UPLOAD_ROOT.resolve(),
-    (MODEL_DIR / "tmp").resolve(),
+    _TMP_DIR.resolve(),
+    Path.home().resolve(),  # Allow serving user image files from home directory
 ]
 
 

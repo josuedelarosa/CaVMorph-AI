@@ -140,6 +140,17 @@ fn get_resource_dir() -> Option<PathBuf> {
             }
         }
 
+        // Linux deb layout: binary at /usr/bin/<name>, resources at /usr/lib/<name>/
+        #[cfg(target_os = "linux")]
+        {
+            if let Some(name) = exe.file_name().and_then(|n| n.to_str()) {
+                let lib_res = PathBuf::from(format!("/usr/lib/{}", name));
+                if lib_res.exists() {
+                    return Some(lib_res);
+                }
+            }
+        }
+
         if let Some(parent) = exe.parent() {
             let candidate = parent.join("resources");
             if candidate.exists() {
