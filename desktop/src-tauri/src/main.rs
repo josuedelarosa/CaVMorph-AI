@@ -111,13 +111,13 @@ fn get_app_data_dir() -> PathBuf {
     {
         dirs::home_dir()
             .unwrap_or_default()
-            .join(".phenoai")
+            .join(".fishometrics")
     }
     #[cfg(target_os = "windows")]
     {
         dirs::config_dir()
             .unwrap_or_default()
-            .join("PhenoAI")
+            .join("Fishometrics")
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
@@ -125,7 +125,7 @@ fn get_app_data_dir() -> PathBuf {
             .unwrap_or_default()
             .join(".local")
             .join("share")
-            .join("phenoai")
+            .join("fishometrics")
     }
 }
 
@@ -264,8 +264,8 @@ except ImportError as e:
 fn iter_python_candidates() -> Vec<PathBuf> {
     let mut candidates: Vec<PathBuf> = Vec::new();
 
-    // 1) PHENOAI_PYTHON env override
-    if let Ok(p) = env::var("PHENOAI_PYTHON") {
+    // 1) FISHOMETRICS_PYTHON env override
+    if let Ok(p) = env::var("FISHOMETRICS_PYTHON") {
         let path = PathBuf::from(&p);
         if path.exists() { candidates.push(path); }
     }

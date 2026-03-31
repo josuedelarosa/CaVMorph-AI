@@ -2,7 +2,7 @@
   <div class="setup-container">
     <div class="setup-card">
       <div class="header">
-        <h1>PhenoAI</h1>
+        <h1>Fishometrics</h1>
         <p class="subtitle">First-time Setup</p>
       </div>
 
@@ -51,7 +51,7 @@
         <div v-else-if="pythonPath && modelDir && !runtimeDir" class="needs-model">
           <div class="help-text">
             <p><strong>Inference runtime files are missing.</strong>
-              Reinstall PhenoAI using the latest installer, then click Check Again.</p>
+              Reinstall Fishometrics using the latest installer, then click Check Again.</p>
           </div>
           <div class="actions" style="margin-top:12px">
             <button @click="checkEnvironment" class="btn-secondary">Check Again</button>
@@ -62,7 +62,7 @@
         <div v-else-if="!pythonPath" class="needs-python">
           <div class="help-text">
             <p><strong>No Python runtime found.</strong>
-              Install Python 3.9+ or reinstall PhenoAI with the bundled runtime.</p>
+              Install Python 3.9+ or reinstall Fishometrics with the bundled runtime.</p>
           </div>
           <div class="actions" style="margin-top:12px">
             <button @click="checkEnvironment" class="btn-secondary">Check Again</button>
@@ -214,7 +214,7 @@ const checkEnvironment = async () => {
 const runSetup = async () => {
   setupStarted.value = true
   statusMessage.value = 'Installing dependencies…'
-  addLog('Starting PhenoAI setup…', 'info')
+  addLog('Starting Fishometrics setup…', 'info')
 
   // Register event listeners
   await tauriListen('setup-progress', (payload: any) => {

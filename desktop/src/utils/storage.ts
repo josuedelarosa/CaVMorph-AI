@@ -8,7 +8,7 @@ import {
 import type { AppConfig, Profile } from '../types'
 
 const CONFIG_FILE = 'fish_morphometrics_config.json'
-const LOCAL_STORAGE_KEY = 'phenoai_config'
+const LOCAL_STORAGE_KEY = 'fishometrics_config'
 
 // Built-in preset profiles — always available, cannot be deleted
 export const PRESET_PROFILES: import('../types').Profile[] = [

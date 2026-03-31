@@ -11,5 +11,5 @@ Put `python.exe` and its runtime files directly under this directory, for exampl
 The app will auto-detect bundled runtime paths from Tauri resources at startup.
 
 ## Notes
-- If this folder is empty, PhenoAI falls back to app venv/system Python detection.
+- If this folder is empty, Fishometrics falls back to app venv/system Python detection.
 - For fully offline installers, pre-bundle required packages in this runtime or ensure setup can install them.

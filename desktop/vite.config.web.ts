@@ -4,17 +4,17 @@
  * Usage:  npm run build:web
  *
  * Outputs to `dist-web/` so it doesn't collide with the Tauri build's `dist/`.
- * The built files are served by the FastAPI backend (PHENOAI_STATIC_DIR).
+ * The built files are served by the FastAPI backend (CAVMORPH_AI_STATIC_DIR).
  */
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
   plugins: [vue()],
-  // Sub-path deployment: nginx serves the app at /phenoai-web/.
-  // Setting base here makes Vite prefix all asset URLs with /phenoai-web/
-  // and sets import.meta.env.BASE_URL to '/phenoai-web/' at runtime.
-  base: '/phenoai-web/',
+  // Sub-path deployment: nginx serves the app at /cavmorph-ai-web/.
+  // Setting base here makes Vite prefix all asset URLs with /cavmorph-ai-web/
+  // and sets import.meta.env.BASE_URL to '/cavmorph-ai-web/' at runtime.
+  base: '/cavmorph-ai-web/',
   define: {
     // Ensure __TAURI__ is NOT defined so isTauri evaluates to false
     // (Tauri plugin injects it automatically; in web build it won't exist)

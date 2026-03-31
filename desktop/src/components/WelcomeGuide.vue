@@ -14,7 +14,7 @@
               <circle cx="8.5" cy="12" r="1.5" fill="currentColor" stroke="none"/>
               <path d="M21 12c-2-3-5-5.5-9-5.5" stroke-dasharray="2.5 1.5" stroke-linecap="round"/>
             </svg>
-            <h1>PhenoAI</h1>
+            <h1>Fishometrics</h1>
             <p class="subtitle">Phenotype analysis for fish morphometrics</p>
           </div>
 
@@ -32,7 +32,7 @@
           <div class="col-section">
             <h2>Export</h2>
             <p>Results are saved to:</p>
-            <div class="path-box"><code>~/Documents/PhenoAI/</code></div>
+            <div class="path-box"><code>~/Documents/Fishometrics/</code></div>
             <p>Each export includes annotated images, phenotype measurements, and profile metadata.</p>
           </div>
 
@@ -53,7 +53,7 @@
         <div class="welcome-col welcome-col-right">
           <div class="col-section">
             <h2>Supported Formats</h2>
-            <p>PhenoAI accepts the following image formats:</p>
+            <p>Fishometrics accepts the following image formats:</p>
             <ul class="format-list">
               <li><span class="fmt-badge">JPEG</span>&nbsp;.jpg, .jpeg</li>
               <li><span class="fmt-badge">PNG</span>&nbsp;.png</li>
@@ -120,7 +120,7 @@ const dontShowAgain = ref(false)
 
 const handleClose = () => {
   if (dontShowAgain.value) {
-    localStorage.setItem('phenoai-welcome-shown', 'true')
+    localStorage.setItem('fishometrics-welcome-shown', 'true')
   }
   emit('close')
 }

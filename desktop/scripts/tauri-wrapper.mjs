@@ -155,8 +155,8 @@ function hasPreparedRuntime(osName, arch) {
 function buildPythonCandidates() {
   const candidates = []
 
-  if (process.env.PHENOAI_BUILD_PYTHON) {
-    candidates.push({ command: process.env.PHENOAI_BUILD_PYTHON, args: [] })
+  if (process.env.FISHOMETRICS_BUILD_PYTHON) {
+    candidates.push({ command: process.env.FISHOMETRICS_BUILD_PYTHON, args: [] })
   }
 
   const repoCondaPython = process.platform === 'win32'
@@ -194,7 +194,7 @@ function findWorkingPython() {
 }
 
 async function ensureBundledRuntime(cliArgs) {
-  if (cliArgs[0] !== 'build' || process.env.PHENOAI_SKIP_RUNTIME_PREPARE === '1') {
+  if (cliArgs[0] !== 'build' || process.env.FISHOMETRICS_SKIP_RUNTIME_PREPARE === '1') {
     return
   }
 
@@ -209,7 +209,7 @@ async function ensureBundledRuntime(cliArgs) {
   const python = findWorkingPython()
   if (!python) {
     throw new Error(
-      'No build-time Python interpreter was found to prepare the bundled runtime. Set PHENOAI_BUILD_PYTHON or install Python 3.9+ on the build machine.'
+      'No build-time Python interpreter was found to prepare the bundled runtime. Set FISHOMETRICS_BUILD_PYTHON or install Python 3.9+ on the build machine.'
     )
   }
 
@@ -239,7 +239,7 @@ function verifyBundledRuntimeInArtifacts(cliArgs) {
   const targetPlatform = resolveTargetPlatform(cliArgs)
   const targetArch = resolveTargetArch(cliArgs)
   const config = readTauriConfig()
-  const productName = config.package?.productName ?? 'PhenoAI'
+  const productName = config.package?.productName ?? 'Fishometrics'
 
   if (targetPlatform === 'macos') {
     const appRuntimeDir = path.join(
@@ -300,7 +300,7 @@ function signAppBundle(appPath) {
 
   // Copy the bundle to a temp directory to strip filesystem xattrs
   // (com.apple.FinderInfo, fileprovider, etc.) that block codesign.
-  const cleanDir = fs.mkdtempSync(path.join(os.tmpdir(), 'phenoai-sign-'))
+  const cleanDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fishometrics-sign-'))
   const cleanApp = path.join(cleanDir, path.basename(appPath))
 
   console.log('  Creating clean copy (stripping xattrs)...')
@@ -436,7 +436,7 @@ function forceDetachVolume(volumeName) {
 
 async function createManualDmg(cliArgs) {
   const config = readTauriConfig()
-  const productName = config.package?.productName ?? 'PhenoAI'
+  const productName = config.package?.productName ?? 'Fishometrics'
   const version = config.package?.version ?? '0.1.0'
   const bundleDir = path.join(desktopDir, 'src-tauri', 'target', 'release', 'bundle')
   const dmgDir = path.join(bundleDir, 'dmg')
@@ -452,7 +452,7 @@ async function createManualDmg(cliArgs) {
   const outputPath = path.join(dmgDir, dmgName)
   const rwPath = path.join(dmgDir, `rw.${dmgName}`)
   const volumeName = dmgName.replace(/\.dmg$/u, '')
-  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'phenoai-dmg-'))
+  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fishometrics-dmg-'))
 
   forceDetachVolume(volumeName)
   fs.rmSync(outputPath, { force: true })
@@ -490,7 +490,7 @@ async function createManualDmg(cliArgs) {
 
 function resolveAppPath() {
   const config = readTauriConfig()
-  const productName = config.package?.productName ?? 'PhenoAI'
+  const productName = config.package?.productName ?? 'Fishometrics'
   return path.join(
     desktopDir,
     'src-tauri',

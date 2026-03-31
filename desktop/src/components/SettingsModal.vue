@@ -78,7 +78,7 @@
                 :checked="props.contributionOptIn"
                 @change="handleContributionToggle"
               />
-              <span class="privacy-toggle-label">Help improve PhenoAI</span>
+              <span class="privacy-toggle-label">Help improve Fishometrics</span>
             </label>
             <p class="privacy-note">
               Share your fish images along with anonymous keypoint coordinates,

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PhenoAI - First Run Setup Script
+Fishometrics - First Run Setup Script
 This script is executed by the Tauri app on first launch to set up the environment.
 
 It handles:
@@ -70,11 +70,11 @@ def get_app_data_dir() -> Path:
     """Get the application data directory."""
     if platform.system() == "Darwin":
         # Use hidden folder to avoid spaces in path (Miniforge installer issue)
-        return Path.home() / ".phenoai"
+        return Path.home() / ".fishometrics"
     elif platform.system() == "Windows":
-        return Path(os.environ.get("APPDATA", "")) / "PhenoAI"
+        return Path(os.environ.get("APPDATA", "")) / "Fishometrics"
     else:
-        return Path.home() / ".local" / "share" / "phenoai"
+        return Path.home() / ".local" / "share" / "fishometrics"
 
 
 def get_app_conda_dir() -> Path:
@@ -985,7 +985,7 @@ def main():
     """Main setup function."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="PhenoAI Setup")
+    parser = argparse.ArgumentParser(description="Fishometrics Setup")
     parser.add_argument("--backend-dir", type=str, help="Path to backend source")
     parser.add_argument("--bundled-model", type=str, help="Path to bundled model weights")
     args = parser.parse_args()

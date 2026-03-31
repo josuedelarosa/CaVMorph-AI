@@ -18,7 +18,7 @@
           <circle cx="8.5" cy="12" r="1.5" fill="currentColor" stroke="none"/>
           <path d="M21 12c-2-3-5-5.5-9-5.5" stroke-dasharray="2.5 1.5" stroke-linecap="round"/>
         </svg>
-        <span class="brand-name">PhenoAI</span>
+        <span class="brand-name">CaVMorph-AI</span>
       </div>
       <div class="header-actions">
         <button class="btn-header" @click="showSettings = true">Settings</button>
@@ -52,7 +52,7 @@
     <!-- Contribution consent banner -->
         <div v-if="showContributionBanner" class="panel-alert panel-alert-contribution">
           <div class="contribution-banner-body">
-            <div class="contribution-banner-title">Help improve PhenoAI</div>
+            <div class="contribution-banner-title">Help improve CaVMorph-AI</div>
             <p class="contribution-banner-text">Share your fish images and anonymous measurements to support academic research. File system paths and personal information are <strong>never</strong> sent. Data is used exclusively to improve model accuracy.</p>
             <div class="contribution-banner-btns">
               <button class="btn-xs btn-outline" @click="acceptContribution(true)">Yes, contribute</button>
@@ -413,7 +413,7 @@
 
     <!-- ─── Footer ──────────────────────────────────────────── -->
     <footer class="app-footer">
-      <span>PhenoAI v0.1.0</span>
+      <span>CaVMorph-AI v0.1.0</span>
       <span class="footer-sep">·</span>
       <span>Backend: <span :class="backendStatus">{{ backendStatusText }}</span></span>
     </footer>
@@ -1103,7 +1103,7 @@ async function exportResults(format: 'csv' | 'json' | 'images') {
       } else {
         const filename = `${profile.name}_results_${timestamp}`
         const documentsDir = await homeDir()
-        const exportDir = `${documentsDir}/Documents/PhenoAI`
+        const exportDir = `${documentsDir}/Documents/CaVMorph-AI`
         // Create directory if it doesn't exist (handled by backend)
         outputPath = `${exportDir}/${filename}.${format}`
       }
@@ -1544,7 +1544,7 @@ async function onSetupComplete() {
   needsSetup.value = false
   
   // Show welcome guide for first-time users
-  const welcomeShown = localStorage.getItem('phenoai-welcome-shown')
+  const welcomeShown = localStorage.getItem('cavmorph-ai-welcome-shown')
   if (!welcomeShown) {
     showWelcome.value = true
   }
@@ -1665,7 +1665,7 @@ onMounted(async () => {
   // If setup is not needed, continue with normal initialization
   if (!needsSetup.value) {
     // Check if welcome guide should be shown (first time user)
-    const welcomeShown = localStorage.getItem('phenoai-welcome-shown')
+    const welcomeShown = localStorage.getItem('cavmorph-ai-welcome-shown')
     if (!welcomeShown) {
       showWelcome.value = true
     }

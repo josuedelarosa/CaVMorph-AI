@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PhenoAI – Lightweight ONNX Runtime Setup
+Fishometrics – Lightweight ONNX Runtime Setup
 Replaces the heavy Conda/MMPose setup with a simple pip-based installation.
 
 Steps:
@@ -187,11 +187,11 @@ def main():
         app_data = Path(args.app_data_dir)
     else:
         if platform.system() == "Windows":
-            app_data = Path(os.environ.get("APPDATA", Path.home())) / "PhenoAI"
+            app_data = Path(os.environ.get("APPDATA", Path.home())) / "Fishometrics"
         elif platform.system() == "Darwin":
-            app_data = Path.home() / ".phenoai"
+            app_data = Path.home() / ".fishometrics"
         else:
-            app_data = Path.home() / ".local" / "share" / "phenoai"
+            app_data = Path.home() / ".local" / "share" / "fishometrics"
 
     app_data.mkdir(parents=True, exist_ok=True)
     venv_dir = app_data / "venv"
@@ -208,7 +208,7 @@ def main():
             if (dev_model / "model.onnx").exists():
                 model_dir = dev_model
 
-    emit_progress(0, "Starting PhenoAI ONNX runtime setup…")
+    emit_progress(0, "Starting Fishometrics ONNX runtime setup…")
 
     step_check_python()
     step_create_venv(venv_dir)

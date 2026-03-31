@@ -15,7 +15,7 @@ echo "🧹 Cleaning Python bytecode from app bundle..."
 ./clean-python-cache.sh
 
 DMG_DIR="src-tauri/target/release/bundle/dmg"
-DMG_FILE="PhenoAI_0.1.0_aarch64.dmg"
+DMG_FILE="Fishometrics_0.1.0_aarch64.dmg"
 
 if [[ ! -f "$DMG_DIR/$DMG_FILE" ]]; then
     echo "Creating DMG manually with custom layout..."
@@ -26,12 +26,12 @@ if [[ ! -f "$DMG_DIR/$DMG_FILE" ]]; then
     
     # Create temporary directory for DMG contents
     mkdir -p dmg_temp
-    cp -R "PhenoAI.app" dmg_temp/
+    cp -R "Fishometrics.app" dmg_temp/
     ln -s /Applications dmg_temp/Applications
     
     # Create DMG with custom window size
     hdiutil create \
-        -volname "PhenoAI" \
+        -volname "Fishometrics" \
         -srcfolder dmg_temp \
         -ov \
         -format UDZO \

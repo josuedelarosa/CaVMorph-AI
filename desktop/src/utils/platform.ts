@@ -32,7 +32,7 @@ export async function getBackendUrl(): Promise<string> {
     _cachedBackendUrl = 'http://127.0.0.1:8008'
   } else {
     // Web mode — API is same-origin (FastAPI serves the SPA).
-    // When deployed under a sub-path (e.g. /phenoai-web/), Vite sets
+    // When deployed under a sub-path (e.g. /cavmorph-ai-web/), Vite sets
     // import.meta.env.BASE_URL to that prefix so API calls go to the
     // right path and nginx can proxy them correctly.
     const base = ((import.meta as any).env?.BASE_URL || '/').replace(/\/$/, '')
@@ -246,7 +246,7 @@ export async function appDataDir(): Promise<string> {
     const { appDataDir: tauriAppDataDir } = await import('@tauri-apps/api/path')
     return tauriAppDataDir()
   }
-  return '/phenoai-data/'  // placeholder, web mode uses localStorage
+  return '/cavmorph-ai-data/'  // placeholder, web mode uses localStorage
 }
 
 export async function homeDir(): Promise<string> {
