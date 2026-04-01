@@ -37,15 +37,15 @@ if str(_ROOT) not in sys.path:
 from inference_runtime.inference import create_engine
 from inference_runtime.types import InferenceResult
 
-logger = logging.getLogger("phenoai.runtime")
+logger = logging.getLogger("cavmorph_ai.runtime")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
 # --------------------------------------------------
 # Config from environment
 # --------------------------------------------------
-MODEL_DIR = Path(os.environ.get("FISH_MODEL_DIR", os.environ.get("PHENOAI_MODEL_DIR", "models/cavfish_v1"))).resolve()
-DEVICE = os.environ.get("FISH_DEVICE", os.environ.get("PHENOAI_DEVICE", "cpu"))
-FORCE_LEGACY = os.environ.get("PHENOAI_USE_LEGACY", "").strip() == "1"
+MODEL_DIR = Path(os.environ.get("FISH_MODEL_DIR", os.environ.get("CAVMORPH_AI_MODEL_DIR", "models/cavfish_v1"))).resolve()
+DEVICE = os.environ.get("FISH_DEVICE", os.environ.get("CAVMORPH_AI_DEVICE", "cpu"))
+FORCE_LEGACY = os.environ.get("CAVMORPH_AI_USE_LEGACY", "").strip() == "1"
 
 logger.info("Model dir: %s", MODEL_DIR)
 logger.info("Device: %s", DEVICE)
@@ -80,7 +80,7 @@ def _init_engine() -> None:
 # --------------------------------------------------
 # FastAPI app
 # --------------------------------------------------
-app = FastAPI(title="PhenoAI Inference Runtime")
+app = FastAPI(title="CaVMorph-AI Inference Runtime")
 
 
 @app.on_event("startup")
@@ -414,13 +414,13 @@ def _scale_resp_to_original(resp: Dict[str, Any], scale: float) -> None:
 @app.get("/")
 def root():
     """Serve the Vue SPA when available, otherwise return JSON health info."""
-    _STATIC_DIR = Path(os.environ.get("PHENOAI_STATIC_DIR", ""))
+    _STATIC_DIR = Path(os.environ.get("CAVMORPH_AI_STATIC_DIR", ""))
     index = _STATIC_DIR / "index.html"
     if index.is_file():
         return FileResponse(str(index), media_type="text/html")
     return {
         "ok": True,
-        "service": "phenoai-inference-runtime",
+        "service": "cavmorph-ai-inference-runtime",
         "runtime": "onnx" if not FORCE_LEGACY else "legacy",
         "endpoints": ["/health", "/model/info", "/infer/image", "/infer/folder"],
     }
@@ -691,7 +691,7 @@ def export_annotated(req: ExportAnnotatedImagesReq) -> Dict[str, Any]:
 # --------------------------------------------------
 # Web deployment: upload, file serving, download exports
 # --------------------------------------------------
-_UPLOAD_ROOT = Path(os.environ.get("PHENOAI_UPLOAD_DIR", tempfile.gettempdir())) / "phenoai_uploads"
+_UPLOAD_ROOT = Path(os.environ.get("CAVMORPH_AI_UPLOAD_DIR", tempfile.gettempdir())) / "cavmorph_ai_uploads"
 _UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 
 # Allowed base directories for file serving (security: prevent path traversal)
@@ -833,7 +833,7 @@ def download_json(req: DownloadExportReq):
 @app.post("/export/images/download")
 def download_images(req: DownloadExportReq):
     """Generate annotated images and return them as a ZIP download."""
-    tmp_dir = tempfile.mkdtemp(prefix="phenoai_export_")
+    tmp_dir = tempfile.mkdtemp(prefix="cavmorph_ai_export_")
     try:
         _export_annotated_images(tmp_dir, req.predictions)
 
@@ -861,7 +861,7 @@ def download_images(req: DownloadExportReq):
 # --------------------------------------------------
 # Static assets + SPA catch-all (web deployment)
 # --------------------------------------------------
-_STATIC_DIR_VAL = Path(os.environ.get("PHENOAI_STATIC_DIR", ""))
+_STATIC_DIR_VAL = Path(os.environ.get("CAVMORPH_AI_STATIC_DIR", ""))
 if _STATIC_DIR_VAL.is_dir() and (_STATIC_DIR_VAL / "index.html").exists():
     # Serve /assets/, /favicon.ico, etc. from the built SPA directory.
     # This mount only matches paths that correspond to real files — unknown
@@ -873,7 +873,7 @@ if _STATIC_DIR_VAL.is_dir() and (_STATIC_DIR_VAL / "index.html").exists():
 @app.get("/{full_path:path}")
 def spa_catchall(full_path: str):
     """Return index.html for all unknown paths so Vue Router history mode works."""
-    _sd = Path(os.environ.get("PHENOAI_STATIC_DIR", ""))
+    _sd = Path(os.environ.get("CAVMORPH_AI_STATIC_DIR", ""))
     # Try to serve the exact file first (e.g. favicon.ico at root)
     candidate = _sd / full_path
     if candidate.is_file():
@@ -890,10 +890,10 @@ def spa_catchall(full_path: str):
 def main():
     import uvicorn
 
-    port = int(os.environ.get("FISH_PORT", os.environ.get("PHENOAI_PORT", "8008")))
-    host = os.environ.get("PHENOAI_HOST", "127.0.0.1")
+    port = int(os.environ.get("FISH_PORT", os.environ.get("CAVMORPH_AI_PORT", "8008")))
+    host = os.environ.get("CAVMORPH_AI_HOST", "127.0.0.1")
 
-    logger.info("Starting PhenoAI inference runtime on %s:%d", host, port)
+    logger.info("Starting CaVMorph-AI inference runtime on %s:%d", host, port)
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 

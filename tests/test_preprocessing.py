@@ -1,5 +1,5 @@
 """
-PhenoAI Test Suite — Preprocessing Parity Tests
+Fishometrics Test Suite — Preprocessing Parity Tests
 
 Validates that the pure NumPy/OpenCV preprocessing in inference_runtime
 produces identical results to the MMPose pipeline transforms.

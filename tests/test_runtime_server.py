@@ -1,5 +1,5 @@
 """
-PhenoAI Test Suite — Runtime Server Smoke Tests
+Fishometrics Test Suite — Runtime Server Smoke Tests
 
 Validates the FastAPI endpoints exposed by inference_runtime.runtime_server.
 These tests mock the engine to avoid needing real model artifacts.

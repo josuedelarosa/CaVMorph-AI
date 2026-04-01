@@ -1,4 +1,4 @@
-# PhenoAI Inference Runtime — Minimal Dependencies
+# Fishometrics Inference Runtime — Minimal Dependencies
 # NO MMPose, NO Conda, NO training framework required.
 onnxruntime>=1.17.0
 numpy>=1.24.0,<2.0

@@ -1,6 +1,6 @@
 # Inference Runtime — Types
 """
-Data types for the PhenoAI inference runtime.
+Data types for the Fishometrics inference runtime.
 These types define the contract between the Tauri frontend and the inference backend,
 independent of any ML framework.
 """

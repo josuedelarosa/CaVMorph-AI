@@ -1,5 +1,5 @@
 """
-PhenoAI Test Suite — Inference Engine Tests
+Fishometrics Test Suite — Inference Engine Tests
 
 Validates ONNXInferenceEngine, FallbackPyTorchEngine, and create_engine factory.
 """

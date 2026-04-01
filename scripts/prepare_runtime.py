@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-prepare_runtime.py — Build a portable, self-contained Python runtime for PhenoAI.
+prepare_runtime.py — Build a portable, self-contained Python runtime for Fishometrics.
 
 Downloads a standalone CPython interpreter (from python-build-standalone),
 pre-installs every package the ONNX inference backend needs, and places the
@@ -230,7 +230,7 @@ def dir_size_mb(path: Path) -> float:
 # Main
 # ────────────────────────────────────────────────────────────────────────────
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Prepare portable Python for PhenoAI")
+    parser = argparse.ArgumentParser(description="Prepare portable Python for Fishometrics")
     parser.add_argument("--platform", choices=["windows", "macos", "linux"])
     parser.add_argument("--arch", choices=["x64", "arm64"])
     parser.add_argument("--clean", action="store_true", help="Wipe existing runtime first")

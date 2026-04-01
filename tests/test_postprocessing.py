@@ -1,5 +1,5 @@
 """
-PhenoAI Test Suite — Postprocessing Tests
+Fishometrics Test Suite — Postprocessing Tests
 
 Validates heatmap decoding and keypoint transformation.
 """

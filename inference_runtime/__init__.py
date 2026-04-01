@@ -1,6 +1,6 @@
 # Inference Runtime
 """
-Thin inference runtime for PhenoAI.
+Thin inference runtime for Fishometrics.
 No MMPose, no Conda, no training code required.
 """
 from .inference import ONNXInferenceEngine, FallbackPyTorchEngine, create_engine

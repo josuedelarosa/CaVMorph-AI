@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────
-# PhenoAI — Web Deployment
+# CaVMorph-AI — Web Deployment
 # Two-stage build: Node (frontend) → Python (inference + API)
 # ─────────────────────────────────────────────────────────────────────
 
@@ -44,10 +44,10 @@ COPY phenolosses/ /app/phenolosses/
 
 # Environment
 ENV FISH_MODEL_DIR=/app/models/cavfish_v1 \
-    PHENOAI_STATIC_DIR=/app/static \
-    PHENOAI_HOST=0.0.0.0 \
-    PHENOAI_PORT=8008 \
-    PHENOAI_UPLOAD_DIR=/app/uploads
+    CAVMORPH_AI_STATIC_DIR=/app/static \
+    CAVMORPH_AI_HOST=0.0.0.0 \
+    CAVMORPH_AI_PORT=8008 \
+    CAVMORPH_AI_UPLOAD_DIR=/app/uploads
 
 # Create upload directory
 RUN mkdir -p /app/uploads

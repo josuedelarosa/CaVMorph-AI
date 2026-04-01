@@ -26,11 +26,11 @@ from .postprocessing import (
     compute_phenotypes,
 )
 
-logger = logging.getLogger("phenoai.inference")
+logger = logging.getLogger("cavmorph_ai.inference")
 
 
 class ONNXInferenceEngine:
-    """ONNX Runtime inference engine for PhenoAI keypoint detection."""
+    """ONNX Runtime inference engine for CaVMorph-AI keypoint detection."""
 
     def __init__(
         self,
@@ -305,13 +305,13 @@ def create_engine(
       1. ONNX Runtime (if model.onnx + model_metadata.json exist)
       2. Legacy PyTorch/MMPose fallback (if config.py + weights.pth exist)
 
-    Set force_legacy=True or env PHENOAI_USE_LEGACY=1 to force the old path.
+    Set force_legacy=True or env CAVMORPH_AI_USE_LEGACY=1 to force the old path.
     """
     import os
 
     model_path = Path(model_dir)
 
-    if force_legacy or os.environ.get("PHENOAI_USE_LEGACY", "").strip() == "1":
+    if force_legacy or os.environ.get("CAVMORPH_AI_USE_LEGACY", "").strip() == "1":
         logger.info("Using legacy PyTorch/MMPose engine (forced)")
         return FallbackPyTorchEngine(model_dir, device)
 

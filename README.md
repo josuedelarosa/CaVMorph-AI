@@ -1,27 +1,28 @@
-# PhenoAI
+# CaVMorph-AI
 
 Automated morphometric analysis of fish photographs. Detects 20 anatomical landmarks, computes 14 phenotype measurements, and exports results as CSV, JSON, or annotated images.
 
-Runs entirely offline. No data is transmitted.
-
----
-
-## Requirements
-
-- macOS 12+, Windows 10+, or Ubuntu 20.04+
-- 8 GB RAM (16 GB recommended for large batches)
-- ~500 MB disk space
+Runs entirely offline. No data leaves your machine.
 
 ---
 
 ## Installation
 
-Download the latest release for your platform from [Releases](../../releases):
+Pre-built installers are available on the [Releases](https://github.com/josuedelarosa/CaVMorph-AI/releases/tag/v1.0.0) page (v1.0.0):
 
-- **macOS**: `PhenoAI_x.x.x_aarch64.dmg`
-- **Windows**: `PhenoAI_x.x.x_x64-setup.exe`
+| Platform | File |
+|----------|------|
+| macOS (Apple Silicon) | `CaVMorph-AI_macos_aarch64.dmg` |
+| Windows | `CaVMorph-AI_windows_x64.exe` |
+| Linux | `CaVMorph-AI_linux_x64.deb` |
 
 Python and the model weights are bundled. No additional dependencies are required.
+
+---
+
+## Web Access
+
+A hosted version is available at [https://bivl2ab.uis.edu.co/cavmorph-ai-web/](https://bivl2ab.uis.edu.co/cavmorph-ai-web/). Access is granted on request.
 
 ---
 
@@ -32,19 +33,19 @@ Python and the model weights are bundled. No additional dependencies are require
 3. Select any result to review the keypoint overlay and phenotype measurements.
 4. Export via **CSV**, **JSON**, or **Annotated Images**.
 
-Keypoints are color-coded by detection confidence: red below 50%, orange 50-75%, green above 75%. Low-confidence points should be reviewed manually.
+---
+
+## Requirements
+
+- macOS 12+, Windows 10+, or Ubuntu 20.04+
+- 8 GB RAM (16 GB recommended for large batches)
+- ~550 MB disk space
 
 ---
 
-## Web Deployment
+## Model
 
-A Docker-based interface is available for server or shared-lab deployment:
-
-```sh
-docker compose up -d
-```
-
-The app is accessible at `http://your-server/phenoai-web/`. See [docker-compose.yml](docker-compose.yml) for port and path configuration.
+The model was trained on the CaVFish database. The associated paper is referenced in the credits panel within the application. Keypoint names, phenotype pairs, and scale reference can be customized in `models/cavfish_v1/meta.json`.
 
 ---
 
@@ -53,8 +54,8 @@ The app is accessible at `http://your-server/phenoai-web/`. See [docker-compose.
 Prerequisites: Node.js 18+, Rust 1.70+, Python 3.10+.
 
 ```sh
-git clone https://github.com/your-org/cavfish-inference.git
-cd cavfish-inference/desktop
+git clone https://github.com/josuedelarosa/CaVMorph-AI.git
+cd CaVMorph-AI/desktop
 npm install
 npm run tauri build
 ```
@@ -66,12 +67,6 @@ npm run build:web
 ```
 
 Output lands in `desktop/dist-web/`.
-
----
-
-## Model
-
-The default model (`models/cavfish_v1/model.onnx`) was trained on lateral-view cavefish photographs and runs via ONNX Runtime on CPU. Keypoint names, phenotype pairs, and scale reference can be customized in `models/cavfish_v1/meta.json`.
 
 ---
 
