@@ -45,7 +45,11 @@ A hosted version is available at [https://bivl2ab.uis.edu.co/cavmorph-ai-web/](h
 
 ## Model
 
-The model was trained on the CaVFish database. The associated paper is referenced in the credits panel within the application. Keypoint names, phenotype pairs, and scale reference can be customized in `models/cavfish_v1/meta.json`.
+The model was trained on the CaVFish database. Keypoint names, phenotype pairs, and scale reference can be customized in `models/cavfish_v1/meta.json`.
+
+If you use CaVMorph-AI in your research, please cite:
+
+> Poveda-Cuellar, J.L.; Rodríguez-de la Rosa, J.; Martínez-Carrillo, F.; García-Melo, J.E.; García-Melo, L.J.; Marchant, S. & Reu, B. Morphological trait database for Neotropical freshwater fishes powered from artificial intelligence.
 
 ---
 
@@ -67,6 +71,12 @@ npm run build:web
 ```
 
 Output lands in `desktop/dist-web/`.
+
+---
+
+## Maintainers
+
+Developed and maintained by Josué Rodríguez-de la Rosa & Jose Luis Poveda-Cuellar.
 
 ---
 
