@@ -22,7 +22,7 @@ Python and the model weights are bundled. No additional dependencies are require
 
 ## Web Access
 
-A hosted version is available at [https://bivl2ab.uis.edu.co/cavmorph-ai-web/](https://bivl2ab.uis.edu.co/cavmorph-ai-web/). Access is granted on request.
+A hosted version is available at [https://bivl2ab.uis.edu.co/cavmorph-ai-web/](https://bivl2ab.uis.edu.co/cavmorph-ai-web/). Access is granted.
 
 ---
 
