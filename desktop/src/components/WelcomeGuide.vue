@@ -77,13 +77,8 @@
           </div>
 
           <div class="col-section">
-            <h2>Contact &amp; Feedback</h2>
-            <p class="about-maintainers">Developed and maintained by <strong>Josué Rodríguez-de la Rosa</strong> &amp; <strong>Jose Luis Poveda-Cuellar</strong>.</p>
-            <p>Questions, bug reports, or feedback are welcome:</p>
-            <p class="contact-emails">
-              <button class="contact-link" @click="openLink('mailto:josueferjr2@gmail.com')">josueferjr2@gmail.com</button>,
-              <button class="contact-link" @click="openLink('mailto:josepovedaut@gmail.com')">josepovedaut@gmail.com</button>
-            </p>
+            <h2>Learn More</h2>
+            <p>For documentation, source code, and issue tracking, visit the <a href="https://github.com/josuedelarosa/CaVMorph-AI" target="_blank">project repository</a>.</p>
           </div>
         </div>
 

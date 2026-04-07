@@ -74,12 +74,6 @@ Output lands in `desktop/dist-web/`.
 
 ---
 
-## Maintainers
-
-Developed and maintained by Josué Rodríguez-de la Rosa & Jose Luis Poveda-Cuellar.
-
----
-
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE).
