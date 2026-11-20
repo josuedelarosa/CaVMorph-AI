@@ -1,4 +1,4 @@
-# CaVMorph-A
+# CaVMorph-AI
 
 Automated morphometric analysis of fish photographs. Detects 20 anatomical landmarks, computes 14 phenotype measurements, and exports results as CSV, JSON, or annotated images.
 
